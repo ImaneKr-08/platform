@@ -94,7 +94,8 @@ const pageTitle = computed(() => {
   <div class="min-h-screen flex text-[var(--text-primary)] bg-[var(--bg-primary)] transition-colors duration-200">
     
     <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex flex-col w-64 shrink-0 bg-[var(--bg-secondary)] border-r border-[var(--border-color)]">
+    <aside class="hidden lg:flex
+     sticky flex-col w-64 shrink-0 bg-[var(--bg-secondary)] border-r border-[var(--border-color)]">
       <div class="h-16 flex items-center px-6 border-b border-[var(--border-color)] select-none">
         <span class="text-xl font-bold tracking-tight text-[#026783] dark:text-[#0588ad] flex items-center gap-2">
           <Activity class="h-6 w-6 text-emerald-500 animate-pulse" />

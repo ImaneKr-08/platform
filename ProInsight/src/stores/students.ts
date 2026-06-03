@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { api } from '../services/api'
 
 export interface Student {
   firstName: string
@@ -26,7 +27,25 @@ export const useStudentsStore = defineStore('students', () => {
     { firstName: 'Ford', lastName: 'Prefect', registrationNumber: 'REG-2026-010', department: 'Sociology', group: 'SOC-3A', espId: 'ESP32-SOC10' }
   ]
 
-  function initStudents() {
+  async function initStudents() {
+    try {
+      const response = await api.get('/students', { params: { limit: 100 } })
+      if (response.data && Array.isArray(response.data.items)) {
+        students.value = response.data.items.map((s: any) => ({
+          firstName: s.firstName,
+          lastName: s.lastName,
+          registrationNumber: s.studentCode,
+          department: s.department,
+          group: 'A',
+          espId: s.braceletId || ''
+        }))
+        saveToStorage()
+        return
+      }
+    } catch (err) {
+      console.warn('Failed to load students from backend, falling back to local storage:', err)
+    }
+
     const saved = localStorage.getItem('proinsight_students')
     if (saved) {
       students.value = JSON.parse(saved)
@@ -40,13 +59,27 @@ export const useStudentsStore = defineStore('students', () => {
     localStorage.setItem('proinsight_students', JSON.stringify(students.value))
   }
 
-  function addStudent(student: Student) {
-    // Prevent duplicate registration numbers or ESP IDs
+  async function addStudent(student: Student) {
     const existsReg = students.value.some(s => s.registrationNumber === student.registrationNumber)
     const existsEsp = students.value.some(s => s.espId === student.espId)
     if (existsReg || existsEsp) {
       return { success: false, message: existsReg ? 'Registration number already exists.' : 'ESP32 ID already assigned.' }
     }
+
+    try {
+      await api.post('/students', {
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: `${student.firstName.toLowerCase()}.${student.lastName.toLowerCase()}@proinsight.edu`,
+        department: student.department,
+        studentCode: student.registrationNumber,
+        braceletId: student.espId || null
+      })
+    } catch (err: any) {
+      console.warn('Failed to save student on backend:', err)
+      return { success: false, message: err.response?.data?.message || 'Failed to save student on backend.' }
+    }
+
     students.value.unshift(student)
     saveToStorage()
     return { success: true }

@@ -15,7 +15,13 @@ const isLoading = ref(false)
 
 const showForgotMsg = ref(false)
 
-function handleLogin() {
+function hideForgotMsg() {
+  setTimeout(() => {
+    showForgotMsg.value = false
+  }, 5000)
+}
+
+async function handleLogin() {
   if (!email.value || !password.value) {
     errorMsg.value = 'Please enter both email and password.'
     return
@@ -25,8 +31,8 @@ function handleLogin() {
   isLoading.value = true
   
   // Simulate minor network delay for premium feel
-  setTimeout(() => {
-    const success = authStore.login(email.value, password.value, rememberMe.value)
+  setTimeout(async () => {
+    const success = await authStore.login(email.value, password.value, rememberMe.value)
     isLoading.value = false
     if (success) {
       router.push('/')
@@ -97,7 +103,7 @@ function quickFill(role: 'admin' | 'professor') {
           <div>
             <div class="flex justify-between items-center mb-1.5">
               <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Password</label>
-              <button type="button" @click="showForgotMsg = true; setTimeout(() => showForgotMsg = false, 5000)" class="text-[11px] font-semibold text-[#026783] hover:text-[#0588ad] hover:underline">
+              <button type="button" @click="showForgotMsg = true; hideForgotMsg()" class="text-[11px] font-semibold text-[#026783] hover:text-[#0588ad] hover:underline">
                 Forgot password?
               </button>
             </div>

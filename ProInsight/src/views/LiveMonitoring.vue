@@ -19,6 +19,7 @@ import {
   Grid,
   ClipboardList
 } from 'lucide-vue-next'
+import { useClassroomsStore } from '../stores/classrooms'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +30,7 @@ const authStore = useAuthStore()
 // State
 const selectedExamId = ref('')
 
+const classroomsStore = useClassroomsStore()
 onMounted(() => {
   examsStore.initExams()
   

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { api } from '../services/api'
 
 export interface User {
   email: string
@@ -25,7 +26,27 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isProfessor = computed(() => user.value?.role === 'professor')
 
-  function login(email: string, password: string, remember: boolean): boolean {
+  async function login(email: string, password: string, remember: boolean): Promise<boolean> {
+    try {
+      const response = await api.post('/auth/login', { email, password })
+      if (response.data && response.data.accessToken) {
+        localStorage.setItem('proinsight_access_token', response.data.accessToken)
+        user.value = {
+          email: response.data.user.email,
+          name: response.data.user.name || response.data.user.email.split('@')[0],
+          role: response.data.user.role.toLowerCase() as 'admin' | 'professor',
+          department: response.data.user.department
+        }
+        isAuthenticated.value = true
+        if (remember) {
+          localStorage.setItem('proinsight_auth', JSON.stringify(user.value))
+        }
+        return true
+      }
+    } catch (err) {
+      console.warn('Backend login failed, falling back to mock credentials:', err)
+    }
+
     const matched = mockUsers[email.toLowerCase().trim()]
     if (matched && matched.password === password) {
       user.value = {

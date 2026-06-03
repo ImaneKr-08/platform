@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { api } from '../services/api'
 
 export interface Exam {
   id: string
@@ -60,7 +61,39 @@ export const useExamsStore = defineStore('exams', () => {
     }
   ]
 
-  function initExams() {
+  async function initExams() {
+    try {
+      const response = await api.get('/exams')
+      if (response.data && Array.isArray(response.data)) {
+        exams.value = response.data.map((e: any) => {
+          const statusMap = {
+            PENDING: 'scheduled',
+            ONGOING: 'active',
+            COMPLETED: 'completed'
+          }
+          const frontendStatus = (statusMap[e.status] || 'scheduled') as 'scheduled' | 'active' | 'completed'
+
+          return {
+            id: String(e.id),
+            name: e.title,
+            subject: e.module,
+            classroomId: String(e.classroomId),
+            classroomName: e.classroom?.name || `Classroom ${e.classroomId}`,
+            professorEmail: e.professor?.email || '',
+            professorName: e.professor ? `${e.professor.firstName} ${e.professor.lastName}` : '',
+            date: e.examDate ? e.examDate.split('T')[0] : '',
+            startTime: e.startTime ? new Date(e.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+            endTime: e.endTime ? new Date(e.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+            status: frontendStatus
+          }
+        })
+        saveToStorage()
+        return
+      }
+    } catch (err) {
+      console.warn('Failed to load exams from backend, falling back to local storage:', err)
+    }
+
     const saved = localStorage.getItem('proinsight_exams')
     if (saved) {
       exams.value = JSON.parse(saved)
@@ -74,11 +107,33 @@ export const useExamsStore = defineStore('exams', () => {
     localStorage.setItem('proinsight_exams', JSON.stringify(exams.value))
   }
 
-  function addExam(exam: Omit<Exam, 'id'>) {
+  async function addExam(exam: Omit<Exam, 'id'>) {
     const newExam: Exam = {
       ...exam,
       id: `exam-${Date.now()}`
     }
+
+    try {
+      const examDateStr = exam.date
+      const startIso = new Date(`${examDateStr}T${exam.startTime}`).toISOString()
+      const endIso = new Date(`${examDateStr}T${exam.endTime}`).toISOString()
+
+      const backendExam = await api.post('/exams', {
+        title: exam.name,
+        module: exam.subject,
+        examDate: new Date(exam.date).toISOString(),
+        startTime: startIso,
+        endTime: endIso,
+        classroomId: parseInt(exam.classroomId) || 1,
+        professorId: 1
+      })
+      if (backendExam.data) {
+        newExam.id = String(backendExam.data.id)
+      }
+    } catch (err) {
+      console.warn('Failed to save exam to backend:', err)
+    }
+
     exams.value.push(newExam)
     saveToStorage()
     return newExam

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { api } from '../services/api'
 
 export interface Professor {
   name: string
@@ -18,7 +19,22 @@ export const useProfessorsStore = defineStore('professors', () => {
     { name: 'Prof. Indiana Jones', email: 'prof.jones@proinsight.edu', department: 'Archaeology' }
   ]
 
-  function initProfessors() {
+  async function initProfessors() {
+    try {
+      const response = await api.get('/professors')
+      if (response.data && Array.isArray(response.data)) {
+        professors.value = response.data.map((p: any) => ({
+          name: `${p.firstName} ${p.lastName}`,
+          email: p.email,
+          department: p.department
+        }))
+        saveToStorage()
+        return
+      }
+    } catch (err) {
+      console.warn('Failed to load professors from backend, falling back to local storage:', err)
+    }
+
     const saved = localStorage.getItem('proinsight_professors')
     if (saved) {
       professors.value = JSON.parse(saved)
@@ -32,11 +48,29 @@ export const useProfessorsStore = defineStore('professors', () => {
     localStorage.setItem('proinsight_professors', JSON.stringify(professors.value))
   }
 
-  function addProfessor(prof: Professor) {
+  async function addProfessor(prof: Professor) {
     const exists = professors.value.some(p => p.email.toLowerCase() === prof.email.toLowerCase())
     if (exists) {
       return { success: false, message: 'Professor email already exists.' }
     }
+
+    try {
+      const nameParts = prof.name.split(' ')
+      const firstName = nameParts[0] || 'Prof.'
+      const lastName = nameParts.slice(1).join(' ') || 'Professor'
+
+      await api.post('/professors', {
+        firstName,
+        lastName,
+        email: prof.email,
+        department: prof.department,
+        password: 'prof123password'
+      })
+    } catch (err: any) {
+      console.warn('Failed to save professor to backend:', err)
+      return { success: false, message: err.response?.data?.message || 'Failed to save professor on backend.' }
+    }
+
     professors.value.unshift(prof)
     saveToStorage()
     return { success: true }

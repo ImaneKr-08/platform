@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { api } from '../services/api'
 
 export interface TableLayout {
   id: string
@@ -75,7 +76,28 @@ export const useClassroomsStore = defineStore('classrooms', () => {
     }
   ]
 
-  function initClassrooms() {
+  async function initClassrooms() {
+    try {
+      const response = await api.get('/classrooms')
+      if (response.data && Array.isArray(response.data)) {
+        classrooms.value = response.data.map((c: any) => ({
+          id: String(c.id),
+          name: c.name,
+          rows: c.rows,
+          cols: c.columns || c.cols,
+          tables: (c.tables || []).map((t: any) => ({
+            id: String(t.id),
+            code: t.qrCode ? `T-${t.id}` : `T-${t.id}`,
+            slotIndex: t.positionY * (c.columns || c.cols) + t.positionX
+          }))
+        }))
+        saveToStorage()
+        return
+      }
+    } catch (err) {
+      console.warn('Failed to load classrooms from backend, falling back to local storage:', err)
+    }
+
     const saved = localStorage.getItem('proinsight_classrooms')
     if (saved) {
       classrooms.value = JSON.parse(saved)
@@ -89,14 +111,12 @@ export const useClassroomsStore = defineStore('classrooms', () => {
     localStorage.setItem('proinsight_classrooms', JSON.stringify(classrooms.value))
   }
 
-  function addClassroom(name: string, rows: number, cols: number, tableCount: number) {
+  async function addClassroom(name: string, rows: number, cols: number, tableCount: number) {
     const id = `room-${Date.now()}`
     const tables: TableLayout[] = []
     
-    // Generate initial table pool
     for (let i = 1; i <= tableCount; i++) {
       const code = `D-${i < 10 ? '0' + i : i}`
-      // Automatically place the first few desks, leave the rest in pool
       const slotIndex = (i - 1) < (rows * cols) ? (i - 1) : null
       tables.push({
         id: `desk-${id}-${i}`,
@@ -106,6 +126,22 @@ export const useClassroomsStore = defineStore('classrooms', () => {
     }
 
     const newRoom: Classroom = { id, name, rows, cols, tables }
+
+    try {
+      const backendRoom = await api.post('/classrooms', {
+        name,
+        building: 'Main Building',
+        capacity: tableCount,
+        rows,
+        columns: cols
+      })
+      if (backendRoom.data) {
+        newRoom.id = String(backendRoom.data.id)
+      }
+    } catch (err) {
+      console.warn('Failed to save classroom to backend:', err)
+    }
+
     classrooms.value.push(newRoom)
     saveToStorage()
     return newRoom
