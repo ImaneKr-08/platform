@@ -13,10 +13,10 @@ export declare class ProfessorsController {
     } & {
         email: string;
         id: number;
+        userId: number;
         firstName: string;
         lastName: string;
         department: string;
-        userId: number;
     }>;
     findAll(): Promise<({
         user: {
@@ -27,10 +27,10 @@ export declare class ProfessorsController {
     } & {
         email: string;
         id: number;
+        userId: number;
         firstName: string;
         lastName: string;
         department: string;
-        userId: number;
     })[]>;
     findOne(id: number): Promise<{
         user: {
@@ -52,10 +52,10 @@ export declare class ProfessorsController {
     } & {
         email: string;
         id: number;
+        userId: number;
         firstName: string;
         lastName: string;
         department: string;
-        userId: number;
     }>;
     update(id: number, updateProfessorDto: UpdateProfessorDto): Promise<{
         user: {
@@ -65,10 +65,10 @@ export declare class ProfessorsController {
     } & {
         email: string;
         id: number;
+        userId: number;
         firstName: string;
         lastName: string;
         department: string;
-        userId: number;
     }>;
     remove(id: number): Promise<{
         name: string;

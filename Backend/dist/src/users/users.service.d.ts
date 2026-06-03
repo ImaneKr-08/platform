@@ -23,10 +23,10 @@ export declare class UsersService {
         professor: {
             email: string;
             id: number;
+            userId: number;
             firstName: string;
             lastName: string;
             department: string;
-            userId: number;
         } | null;
         name: string;
         email: string;

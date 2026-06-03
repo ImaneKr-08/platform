@@ -45,10 +45,10 @@ export declare class MonitoringService {
             professor: {
                 email: string;
                 id: number;
+                userId: number;
                 firstName: string;
                 lastName: string;
                 department: string;
-                userId: number;
             };
             classroom: {
                 name: string;

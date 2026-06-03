@@ -25,6 +25,13 @@ export declare class ClassroomsService {
         columns: number;
     })[]>;
     findOne(id: number): Promise<{
+        tables: {
+            id: number;
+            classroomId: number;
+            qrCode: string | null;
+            positionX: number;
+            positionY: number;
+        }[];
         exams: {
             title: string;
             id: number;
@@ -35,13 +42,6 @@ export declare class ClassroomsService {
             classroomId: number;
             professorId: number;
             status: import("@prisma/client").$Enums.ExamStatus;
-        }[];
-        tables: {
-            id: number;
-            classroomId: number;
-            qrCode: string | null;
-            positionX: number;
-            positionY: number;
         }[];
     } & {
         name: string;
