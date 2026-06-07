@@ -63,23 +63,29 @@ let AuthService = class AuthService {
         if (!isMatch) {
             throw new common_1.UnauthorizedException('Invalid email or password');
         }
-        return this.generateTokens(user.id, user.email, user.role);
+        return this.generateTokens(user.id, user.name, user.email, user.role);
     }
     async refreshTokens(userId) {
         const user = await this.usersService.findById(userId);
         if (!user) {
             throw new common_1.UnauthorizedException('User not found');
         }
-        return this.generateTokens(user.id, user.email, user.role);
+        return this.generateTokens(user.id, user.name, user.email, user.role);
     }
-    generateTokens(userId, email, role) {
-        const payload = { sub: userId, email, role };
+    generateTokens(userId, name, email, role) {
+        const payload = {
+            sub: userId,
+            email,
+            role,
+        };
         const accessToken = this.jwtService.sign(payload, {
-            secret: process.env.JWT_SECRET || 'proctor_insight_jwt_secret_key_2026_xyz',
+            secret: process.env.JWT_SECRET ||
+                'proctor_insight_jwt_secret_key_2026_xyz',
             expiresIn: '15m',
         });
         const refreshToken = this.jwtService.sign(payload, {
-            secret: process.env.JWT_REFRESH_SECRET || 'proctor_insight_jwt_refresh_secret_key_2026_xyz',
+            secret: process.env.JWT_REFRESH_SECRET ||
+                'proctor_insight_jwt_refresh_secret_key_2026_xyz',
             expiresIn: '7d',
         });
         return {
@@ -87,6 +93,7 @@ let AuthService = class AuthService {
             refreshToken,
             user: {
                 id: userId,
+                name,
                 email,
                 role,
             },

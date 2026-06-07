@@ -5,8 +5,8 @@ export declare class ClassroomsService {
     private prisma;
     constructor(prisma: PrismaService);
     create(createClassroomDto: CreateClassroomDto): Promise<{
-        name: string;
         id: number;
+        name: string;
         building: string;
         capacity: number;
         rows: number;
@@ -17,8 +17,8 @@ export declare class ClassroomsService {
             tables: number;
         };
     } & {
-        name: string;
         id: number;
+        name: string;
         building: string;
         capacity: number;
         rows: number;
@@ -33,8 +33,8 @@ export declare class ClassroomsService {
             positionY: number;
         }[];
         exams: {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;
@@ -44,24 +44,24 @@ export declare class ClassroomsService {
             status: import("@prisma/client").$Enums.ExamStatus;
         }[];
     } & {
-        name: string;
         id: number;
+        name: string;
         building: string;
         capacity: number;
         rows: number;
         columns: number;
     }>;
     update(id: number, updateClassroomDto: UpdateClassroomDto): Promise<{
-        name: string;
         id: number;
+        name: string;
         building: string;
         capacity: number;
         rows: number;
         columns: number;
     }>;
     remove(id: number): Promise<{
-        name: string;
         id: number;
+        name: string;
         building: string;
         capacity: number;
         rows: number;

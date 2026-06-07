@@ -13,8 +13,8 @@ export declare class TablesService {
     }>;
     findAll(classroomId?: number): Promise<({
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;
@@ -29,8 +29,8 @@ export declare class TablesService {
     })[]>;
     findOne(id: number): Promise<{
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;

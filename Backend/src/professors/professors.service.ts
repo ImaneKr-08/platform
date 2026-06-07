@@ -1,26 +1,41 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProfessorDto } from './dto/create-professor.dto';
 import { UpdateProfessorDto } from './dto/update-professor.dto';
 import * as bcrypt from 'bcrypt';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class ProfessorsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+   private mailService: MailService,
+  ) { }
 
   async create(createProfessorDto: CreateProfessorDto) {
-    const { firstName, lastName, email, department, password } = createProfessorDto;
+    const {
+      firstName,
+      lastName,
+      email,
+      department,
+      password,
+    } = createProfessorDto;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
+
     if (existingUser) {
       throw new ConflictException('Email already in use');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    return this.prisma.$transaction(async (tx) => {
+    const professor = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           name: `${firstName} ${lastName}`,
@@ -49,6 +64,19 @@ export class ProfessorsService {
         },
       });
     });
+
+    
+    try {
+      await this.mailService.sendProfessorCredentials(
+        email,
+        `${firstName} ${lastName}`,
+        password,
+      );
+    } catch (error) {
+      console.error('Email sending failed:', error);
+    }
+
+    return professor;
   }
 
   async findAll() {
@@ -62,7 +90,9 @@ export class ProfessorsService {
           },
         },
       },
-      orderBy: { lastName: 'asc' },
+      orderBy: {
+        lastName: 'asc',
+      },
     });
   }
 
@@ -82,40 +112,63 @@ export class ProfessorsService {
     });
 
     if (!professor) {
-      throw new NotFoundException(`Professor with ID ${id} not found`);
+      throw new NotFoundException(
+        `Professor with ID ${id} not found`,
+      );
     }
 
     return professor;
   }
 
-  async update(id: number, updateProfessorDto: UpdateProfessorDto) {
-    const prof = await this.findOne(id);
-    const { firstName, lastName, email, department, password } = updateProfessorDto;
+  async update(
+    id: number,
+    updateProfessorDto: UpdateProfessorDto,
+  ) {
+    const professor = await this.findOne(id);
 
-    if (email && email !== prof.email) {
-      const emailExists = await this.prisma.user.findUnique({ where: { email } });
-      if (emailExists) {
+    const {
+      firstName,
+      lastName,
+      email,
+      department,
+      password,
+    } = updateProfessorDto;
+
+    if (email && email !== professor.email) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
         throw new ConflictException('Email already in use');
       }
     }
 
     return this.prisma.$transaction(async (tx) => {
       const userUpdateData: any = {};
+
       if (firstName || lastName) {
-        const newFirst = firstName || prof.firstName;
-        const newLast = lastName || prof.lastName;
-        userUpdateData.name = `${newFirst} ${newLast}`;
+        userUpdateData.name = `${firstName ?? professor.firstName
+          } ${lastName ?? professor.lastName
+          }`;
       }
+
       if (email) {
         userUpdateData.email = email;
       }
+
       if (password) {
-        userUpdateData.password = await bcrypt.hash(password, 10);
+        userUpdateData.password = await bcrypt.hash(
+          password,
+          10,
+        );
       }
 
       if (Object.keys(userUpdateData).length > 0) {
         await tx.user.update({
-          where: { id: prof.userId },
+          where: {
+            id: professor.userId,
+          },
           data: userUpdateData,
         });
       }
@@ -123,10 +176,10 @@ export class ProfessorsService {
       return tx.professor.update({
         where: { id },
         data: {
-          firstName: firstName ?? undefined,
-          lastName: lastName ?? undefined,
-          email: email ?? undefined,
-          department: department ?? undefined,
+          firstName,
+          lastName,
+          email,
+          department,
         },
         include: {
           user: {
@@ -141,9 +194,12 @@ export class ProfessorsService {
   }
 
   async remove(id: number) {
-    const prof = await this.findOne(id);
+    const professor = await this.findOne(id);
+
     return this.prisma.user.delete({
-      where: { id: prof.userId },
+      where: {
+        id: professor.userId,
+      },
     });
   }
 }

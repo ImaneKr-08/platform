@@ -22,6 +22,7 @@ const realtime_module_1 = require("./realtime/realtime.module");
 const students_module_1 = require("./students/students.module");
 const tables_module_1 = require("./tables/tables.module");
 const users_module_1 = require("./users/users.module");
+const mail_module_1 = require("./mail/mail.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -40,6 +41,7 @@ exports.AppModule = AppModule = __decorate([
             students_module_1.StudentsModule,
             tables_module_1.TablesModule,
             users_module_1.UsersModule,
+            mail_module_1.MailModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

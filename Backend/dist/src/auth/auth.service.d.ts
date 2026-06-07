@@ -10,6 +10,7 @@ export declare class AuthService {
         refreshToken: string;
         user: {
             id: number;
+            name: string;
             email: string;
             role: string;
         };
@@ -19,6 +20,7 @@ export declare class AuthService {
         refreshToken: string;
         user: {
             id: number;
+            name: string;
             email: string;
             role: string;
         };

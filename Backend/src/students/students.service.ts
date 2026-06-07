@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
-
+import * as bcrypt from 'bcrypt';
 @Injectable()
 export class StudentsService {
   constructor(private prisma: PrismaService) {}
@@ -12,28 +12,45 @@ export class StudentsService {
     const emailExists = await this.prisma.student.findUnique({
       where: { email: createStudentDto.email },
     });
+
     if (emailExists) {
-      throw new ConflictException('Email already registered for a student');
+      throw new ConflictException(
+        'Email already registered for a student',
+      );
     }
 
     const codeExists = await this.prisma.student.findUnique({
       where: { studentCode: createStudentDto.studentCode },
     });
+
     if (codeExists) {
-      throw new ConflictException('Student code already registered');
+      throw new ConflictException(
+        'Student code already registered',
+      );
     }
 
     if (createStudentDto.braceletId) {
       const braceletExists = await this.prisma.student.findUnique({
         where: { braceletId: createStudentDto.braceletId },
       });
+
       if (braceletExists) {
-        throw new ConflictException('Bracelet already assigned to another student');
+        throw new ConflictException(
+          'Bracelet already assigned to another student',
+        );
       }
     }
 
+    const hashedPassword = await bcrypt.hash(
+      createStudentDto.password,
+      10,
+    );
+
     return this.prisma.student.create({
-      data: createStudentDto,
+      data: {
+        ...createStudentDto,
+        password: hashedPassword,
+      },
     });
   }
 

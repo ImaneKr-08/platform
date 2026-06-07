@@ -7,8 +7,8 @@ export declare class ExamsService {
     private realtimeGateway;
     constructor(prisma: PrismaService, realtimeGateway: RealtimeGateway);
     create(createExamDto: CreateExamDto): Promise<{
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -19,16 +19,16 @@ export declare class ExamsService {
     }>;
     findAll(): Promise<({
         professor: {
-            email: string;
             id: number;
+            email: string;
             userId: number;
             firstName: string;
             lastName: string;
             department: string;
         };
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;
@@ -38,8 +38,8 @@ export declare class ExamsService {
             examStudents: number;
         };
     } & {
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -50,16 +50,16 @@ export declare class ExamsService {
     })[]>;
     findOne(id: number): Promise<{
         professor: {
-            email: string;
             id: number;
+            email: string;
             userId: number;
             firstName: string;
             lastName: string;
             department: string;
         };
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;
@@ -67,8 +67,9 @@ export declare class ExamsService {
         };
         examStudents: ({
             student: {
-                email: string;
                 id: number;
+                email: string;
+                password: string;
                 createdAt: Date;
                 updatedAt: Date;
                 firstName: string;
@@ -103,8 +104,8 @@ export declare class ExamsService {
             examId: number;
         }[];
     } & {
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -114,8 +115,8 @@ export declare class ExamsService {
         status: import("@prisma/client").$Enums.ExamStatus;
     }>;
     update(id: number, updateExamDto: UpdateExamDto): Promise<{
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -125,8 +126,8 @@ export declare class ExamsService {
         status: import("@prisma/client").$Enums.ExamStatus;
     }>;
     remove(id: number): Promise<{
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -136,8 +137,8 @@ export declare class ExamsService {
         status: import("@prisma/client").$Enums.ExamStatus;
     }>;
     assignProfessor(id: number, professorId: number): Promise<{
-        title: string;
         id: number;
+        title: string;
         module: string;
         examDate: Date;
         startTime: Date;
@@ -153,8 +154,8 @@ export declare class ExamsService {
     start(id: number): Promise<{
         message: string;
         exam: {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;
@@ -174,8 +175,8 @@ export declare class ExamsService {
     end(id: number): Promise<{
         message: string;
         exam: {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;

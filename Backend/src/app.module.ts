@@ -13,6 +13,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { StudentsModule } from './students/students.module';
 import { TablesModule } from './tables/tables.module';
 import { UsersModule } from './users/users.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     StudentsModule,
     TablesModule,
     UsersModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

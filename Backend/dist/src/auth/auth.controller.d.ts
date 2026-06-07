@@ -9,6 +9,7 @@ export declare class AuthController {
         refreshToken: string;
         user: {
             id: number;
+            name: string;
             email: string;
             role: string;
         };
@@ -23,6 +24,7 @@ export declare class AuthController {
         refreshToken: string;
         user: {
             id: number;
+            name: string;
             email: string;
             role: string;
         };

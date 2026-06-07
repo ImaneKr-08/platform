@@ -5,8 +5,8 @@ export declare class MonitoringController {
     startSession(examId: number): Promise<{
         message: string;
         exam: {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;
@@ -26,8 +26,8 @@ export declare class MonitoringController {
     endSession(sessionId: number): Promise<{
         message: string;
         exam: {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;
@@ -41,24 +41,24 @@ export declare class MonitoringController {
     getSession(id: number): Promise<{
         exam: {
             professor: {
-                email: string;
                 id: number;
+                email: string;
                 userId: number;
                 firstName: string;
                 lastName: string;
                 department: string;
             };
             classroom: {
-                name: string;
                 id: number;
+                name: string;
                 building: string;
                 capacity: number;
                 rows: number;
                 columns: number;
             };
         } & {
-            title: string;
             id: number;
+            title: string;
             module: string;
             examDate: Date;
             startTime: Date;

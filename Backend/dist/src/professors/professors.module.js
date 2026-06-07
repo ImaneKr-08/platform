@@ -10,11 +10,14 @@ exports.ProfessorsModule = void 0;
 const common_1 = require("@nestjs/common");
 const professors_service_1 = require("./professors.service");
 const professors_controller_1 = require("./professors.controller");
+const prisma_module_1 = require("../prisma/prisma.module");
+const mail_module_1 = require("../mail/mail.module");
 let ProfessorsModule = class ProfessorsModule {
 };
 exports.ProfessorsModule = ProfessorsModule;
 exports.ProfessorsModule = ProfessorsModule = __decorate([
     (0, common_1.Module)({
+        imports: [prisma_module_1.PrismaModule, mail_module_1.MailModule],
         controllers: [professors_controller_1.ProfessorsController],
         providers: [professors_service_1.ProfessorsService],
         exports: [professors_service_1.ProfessorsService],

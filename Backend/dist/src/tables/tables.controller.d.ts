@@ -13,8 +13,8 @@ export declare class TablesController {
     }>;
     findAll(classroomId?: string): Promise<({
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;
@@ -29,8 +29,8 @@ export declare class TablesController {
     })[]>;
     findOne(id: number): Promise<{
         classroom: {
-            name: string;
             id: number;
+            name: string;
             building: string;
             capacity: number;
             rows: number;

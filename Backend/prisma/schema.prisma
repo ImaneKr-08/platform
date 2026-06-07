@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -39,47 +40,48 @@ model User {
 }
 
 model Student {
-  id           Int          @id @default(autoincrement())
-  firstName    String
-  lastName     String
-  email        String       @unique
-  department   String
-  studentCode  String       @unique
-  braceletId   String?      @unique
-  heartRate    Int?
-  stressScore  Float?
-  stressLevel  StressLevel?
-  connected    Boolean      @default(false)
-  lastUpdate   DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id          Int          @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  email       String       @unique
+  password  String
+  department  String
+  studentCode String       @unique
+  braceletId  String?      @unique
+  heartRate   Int?
+  stressScore Float?
+  stressLevel StressLevel?
+  connected   Boolean      @default(false)
+  lastUpdate  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   examStudents     ExamStudent[]
   telemetryHistory TelemetryHistory[]
 }
 
 model Professor {
-  id         Int      @id @default(autoincrement())
+  id         Int    @id @default(autoincrement())
   firstName  String
   lastName   String
-  email      String   @unique
+  email      String @unique
   department String
-  userId     Int      @unique
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int    @unique
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  exams      Exam[]
+  exams Exam[]
 }
 
 model Classroom {
-  id        Int      @id @default(autoincrement())
-  name      String
-  building  String
-  capacity  Int
-  rows      Int
-  columns   Int
+  id       Int    @id @default(autoincrement())
+  name     String
+  building String
+  capacity Int
+  rows     Int
+  columns  Int
 
-  tables    Table[]
-  exams     Exam[]
+  tables Table[]
+  exams  Exam[]
 }
 
 model Table {
@@ -135,14 +137,14 @@ model MonitoringSession {
 }
 
 model TelemetryHistory {
-  id           Int               @id @default(autoincrement())
-  studentId    Int
-  student      Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  sessionId    Int
-  session      MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  braceletId   String
-  heartRate    Int
-  stressScore  Float
-  stressLevel  StressLevel
-  timestamp    DateTime          @default(now())
+  id          Int               @id @default(autoincrement())
+  studentId   Int
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId   Int
+  session     MonitoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  braceletId  String
+  heartRate   Int
+  stressScore Float
+  stressLevel StressLevel
+  timestamp   DateTime          @default(now())
 }

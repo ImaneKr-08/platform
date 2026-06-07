@@ -31,7 +31,6 @@ async function handleLogin() {
   isLoading.value = true
   
   // Simulate minor network delay for premium feel
-  setTimeout(async () => {
     const success = await authStore.login(email.value, password.value, rememberMe.value)
     isLoading.value = false
     if (success) {
@@ -39,7 +38,7 @@ async function handleLogin() {
     } else {
       errorMsg.value = 'Invalid email or password. Check credentials below.'
     }
-  }, 800)
+
 }
 
 function quickFill(role: 'admin' | 'professor') {

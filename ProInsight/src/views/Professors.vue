@@ -16,7 +16,9 @@ const errorMsg = ref('')
 const formModel = ref<Professor>({
   name: '',
   email: '',
-  department: 'Computer Science'
+  department: 'Computer Science',
+  id: 0,
+  password: ''
 })
 
 onMounted(() => {
@@ -38,13 +40,30 @@ const filteredProfessors = computed(() => {
   })
 })
 
+function generatePassword(length = 10) {
+  const chars =
+    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+
+  let password = ''
+
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(
+      Math.floor(Math.random() * chars.length)
+    )
+  }
+
+  formModel.value.password = password
+}
+
 function openAddModal() {
   modalMode.value = 'add'
   formModel.value = {
     name: '',
     email: '',
-    department: 'Computer Science'
+    department: 'Computer Science',
+    id: 0
   }
+  generatePassword()
   errorMsg.value = ''
   isFormModalOpen.value = true
 }
@@ -56,34 +75,46 @@ function openEditModal(prof: Professor) {
   isFormModalOpen.value = true
 }
 
-function handleSave() {
-  if (!formModel.value.name || !formModel.value.email) {
-    errorMsg.value = 'Name and email are required.'
+async function handleSave() {
+  if (!formModel.value.name.trim()) {
+    errorMsg.value = 'Name is required.'
+    return
+  }
+
+  if (!formModel.value.email.trim()) {
+    errorMsg.value = 'Email is required.'
     return
   }
 
   errorMsg.value = ''
 
+  let result
+
   if (modalMode.value === 'add') {
-    const res = professorsStore.addProfessor(formModel.value)
-    if (res.success) {
-      isFormModalOpen.value = false
-    } else {
-      errorMsg.value = res.message || 'Error adding professor.'
-    }
+    const { id, ...professorData } = formModel.value
+    result = await professorsStore.addProfessor(professorData)
   } else {
-    const res = professorsStore.updateProfessor(formModel.value.email, formModel.value)
-    if (res.success) {
-      isFormModalOpen.value = false
-    } else {
-      errorMsg.value = res.message || 'Error updating professor.'
-    }
+    result = await professorsStore.updateProfessor(
+      formModel.value.id,
+      formModel.value
+    )
+  }
+
+  if (result.success) {
+    isFormModalOpen.value = false
+  } else {
+    errorMsg.value = result.message || 'Operation failed.'
   }
 }
+async function handleDelete(id: number) {
+  if (!confirm('Are you sure you want to delete this professor?')) {
+    return
+  }
 
-function handleDelete(email: string) {
-  if (confirm('Are you sure you want to delete this professor?')) {
-    professorsStore.deleteProfessor(email)
+  const result = await professorsStore.deleteProfessor(id)
+
+  if (!result.success) {
+    errorMsg.value = result.message
   }
 }
 </script>
@@ -140,7 +171,7 @@ function handleDelete(email: string) {
             </tr>
           </thead>
           <tbody class="divide-y divide-[var(--border-color)]">
-            <tr v-for="prof in filteredProfessors" :key="prof.email" class="hover:bg-[var(--bg-tertiary)]/50 transition-colors">
+            <tr v-for="prof in filteredProfessors" :key="prof.id" class="hover:bg-[var(--bg-tertiary)]/50 transition-colors">
               <td class="px-6 py-4 font-semibold text-[var(--text-primary)]">
                 {{ prof.name }}
               </td>
@@ -160,7 +191,7 @@ function handleDelete(email: string) {
                     <Edit2 class="h-4 w-4" />
                   </button>
                   <button
-                    @click="handleDelete(prof.email)"
+                    @click="handleDelete(prof.id)"
                     class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all border border-transparent hover:border-rose-100 dark:hover:border-rose-900/30"
                     title="Delete Professor"
                   >
@@ -213,6 +244,31 @@ function handleDelete(email: string) {
             title="Emails cannot be modified once set"
           />
         </div>
+       <div v-if="modalMode === 'add'">
+  <label class="block text-xs font-semibold mb-1">
+    Temporary Password
+  </label>
+
+  <div class="flex gap-2">
+    <input
+      v-model="formModel.password"
+      type="text"
+      class="input-field flex-1"
+    />
+
+    <button
+      type="button"
+      @click="generatePassword()"
+      class="px-3 py-2 bg-[#026783] text-white rounded-lg"
+    >
+      Generate
+    </button>
+  </div>
+
+  <p class="text-xs text-slate-500 mt-1">
+    Give this password to the professor.
+  </p>
+</div> 
 
         <div>
           <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Department</label>

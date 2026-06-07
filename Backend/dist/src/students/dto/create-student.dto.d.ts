@@ -5,4 +5,5 @@ export declare class CreateStudentDto {
     department: string;
     studentCode: string;
     braceletId?: string;
+    password: string;
 }

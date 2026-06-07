@@ -46,13 +46,16 @@ exports.ProfessorsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const bcrypt = __importStar(require("bcrypt"));
+const mail_service_1 = require("../mail/mail.service");
 let ProfessorsService = class ProfessorsService {
     prisma;
-    constructor(prisma) {
+    mailService;
+    constructor(prisma, mailService) {
         this.prisma = prisma;
+        this.mailService = mailService;
     }
     async create(createProfessorDto) {
-        const { firstName, lastName, email, department, password } = createProfessorDto;
+        const { firstName, lastName, email, department, password, } = createProfessorDto;
         const existingUser = await this.prisma.user.findUnique({
             where: { email },
         });
@@ -60,7 +63,7 @@ let ProfessorsService = class ProfessorsService {
             throw new common_1.ConflictException('Email already in use');
         }
         const hashedPassword = await bcrypt.hash(password, 10);
-        return this.prisma.$transaction(async (tx) => {
+        const professor = await this.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
                 data: {
                     name: `${firstName} ${lastName}`,
@@ -88,6 +91,13 @@ let ProfessorsService = class ProfessorsService {
                 },
             });
         });
+        try {
+            await this.mailService.sendProfessorCredentials(email, `${firstName} ${lastName}`, password);
+        }
+        catch (error) {
+            console.error('Email sending failed:', error);
+        }
+        return professor;
     }
     async findAll() {
         return this.prisma.professor.findMany({
@@ -100,7 +110,9 @@ let ProfessorsService = class ProfessorsService {
                     },
                 },
             },
-            orderBy: { lastName: 'asc' },
+            orderBy: {
+                lastName: 'asc',
+            },
         });
     }
     async findOne(id) {
@@ -123,20 +135,20 @@ let ProfessorsService = class ProfessorsService {
         return professor;
     }
     async update(id, updateProfessorDto) {
-        const prof = await this.findOne(id);
-        const { firstName, lastName, email, department, password } = updateProfessorDto;
-        if (email && email !== prof.email) {
-            const emailExists = await this.prisma.user.findUnique({ where: { email } });
-            if (emailExists) {
+        const professor = await this.findOne(id);
+        const { firstName, lastName, email, department, password, } = updateProfessorDto;
+        if (email && email !== professor.email) {
+            const existingUser = await this.prisma.user.findUnique({
+                where: { email },
+            });
+            if (existingUser) {
                 throw new common_1.ConflictException('Email already in use');
             }
         }
         return this.prisma.$transaction(async (tx) => {
             const userUpdateData = {};
             if (firstName || lastName) {
-                const newFirst = firstName || prof.firstName;
-                const newLast = lastName || prof.lastName;
-                userUpdateData.name = `${newFirst} ${newLast}`;
+                userUpdateData.name = `${firstName ?? professor.firstName} ${lastName ?? professor.lastName}`;
             }
             if (email) {
                 userUpdateData.email = email;
@@ -146,17 +158,19 @@ let ProfessorsService = class ProfessorsService {
             }
             if (Object.keys(userUpdateData).length > 0) {
                 await tx.user.update({
-                    where: { id: prof.userId },
+                    where: {
+                        id: professor.userId,
+                    },
                     data: userUpdateData,
                 });
             }
             return tx.professor.update({
                 where: { id },
                 data: {
-                    firstName: firstName ?? undefined,
-                    lastName: lastName ?? undefined,
-                    email: email ?? undefined,
-                    department: department ?? undefined,
+                    firstName,
+                    lastName,
+                    email,
+                    department,
                 },
                 include: {
                     user: {
@@ -170,15 +184,18 @@ let ProfessorsService = class ProfessorsService {
         });
     }
     async remove(id) {
-        const prof = await this.findOne(id);
+        const professor = await this.findOne(id);
         return this.prisma.user.delete({
-            where: { id: prof.userId },
+            where: {
+                id: professor.userId,
+            },
         });
     }
 };
 exports.ProfessorsService = ProfessorsService;
 exports.ProfessorsService = ProfessorsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        mail_service_1.MailService])
 ], ProfessorsService);
 //# sourceMappingURL=professors.service.js.map
