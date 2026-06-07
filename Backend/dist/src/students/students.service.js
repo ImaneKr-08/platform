@@ -81,12 +81,14 @@ let StudentsService = class StudentsService {
         });
     }
     async findAll(paginationDto, department) {
-        const { page = 1, limit = 10, search } = paginationDto;
+        const page = paginationDto.page ?? 1;
+        const limit = paginationDto.limit ?? 100;
         const skip = (page - 1) * limit;
         const where = {};
         if (department) {
             where.department = department;
         }
+        const search = paginationDto.search;
         if (search) {
             where.OR = [
                 { firstName: { contains: search } },
