@@ -6,13 +6,14 @@ export declare class StudentsService {
     private prisma;
     constructor(prisma: PrismaService);
     create(createStudentDto: CreateStudentDto): Promise<{
-        firstName: string;
-        lastName: string;
+        id: number;
         email: string;
-        password: string;
-        department: string;
         studentCode: string;
         braceletId: string | null;
+        firstName: string;
+        lastName: string;
+        password: string;
+        department: string;
         heartRate: number | null;
         stressScore: number | null;
         stressLevel: import("@prisma/client").$Enums.StressLevel | null;
@@ -20,17 +21,17 @@ export declare class StudentsService {
         lastUpdate: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
     }>;
     findAll(paginationDto: PaginationDto, department?: string): Promise<{
         items: {
-            firstName: string;
-            lastName: string;
+            id: number;
             email: string;
-            password: string;
-            department: string;
             studentCode: string;
             braceletId: string | null;
+            firstName: string;
+            lastName: string;
+            password: string;
+            department: string;
             heartRate: number | null;
             stressScore: number | null;
             stressLevel: import("@prisma/client").$Enums.StressLevel | null;
@@ -38,7 +39,6 @@ export declare class StudentsService {
             lastUpdate: Date | null;
             createdAt: Date;
             updatedAt: Date;
-            id: number;
         }[];
         total: number;
         page: number;
@@ -72,13 +72,14 @@ export declare class StudentsService {
             tableId: number;
         })[];
     } & {
-        firstName: string;
-        lastName: string;
+        id: number;
         email: string;
-        password: string;
-        department: string;
         studentCode: string;
         braceletId: string | null;
+        firstName: string;
+        lastName: string;
+        password: string;
+        department: string;
         heartRate: number | null;
         stressScore: number | null;
         stressLevel: import("@prisma/client").$Enums.StressLevel | null;
@@ -86,16 +87,16 @@ export declare class StudentsService {
         lastUpdate: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
     }>;
     update(id: number, updateStudentDto: UpdateStudentDto): Promise<{
-        firstName: string;
-        lastName: string;
+        id: number;
         email: string;
-        password: string;
-        department: string;
         studentCode: string;
         braceletId: string | null;
+        firstName: string;
+        lastName: string;
+        password: string;
+        department: string;
         heartRate: number | null;
         stressScore: number | null;
         stressLevel: import("@prisma/client").$Enums.StressLevel | null;
@@ -103,16 +104,16 @@ export declare class StudentsService {
         lastUpdate: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
     }>;
     remove(id: number): Promise<{
-        firstName: string;
-        lastName: string;
+        id: number;
         email: string;
-        password: string;
-        department: string;
         studentCode: string;
         braceletId: string | null;
+        firstName: string;
+        lastName: string;
+        password: string;
+        department: string;
         heartRate: number | null;
         stressScore: number | null;
         stressLevel: import("@prisma/client").$Enums.StressLevel | null;
@@ -120,6 +121,5 @@ export declare class StudentsService {
         lastUpdate: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
     }>;
 }
