@@ -55,7 +55,8 @@ export class StudentsService {
   }
 
   async findAll(paginationDto: PaginationDto, department?: string) {
-    const { page = 1, limit = 10, search } = paginationDto;
+    const page = paginationDto.page ?? 1;
+    const limit = paginationDto.limit ?? 100;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -64,6 +65,7 @@ export class StudentsService {
       where.department = department;
     }
 
+    const search = paginationDto.search;
     if (search) {
       where.OR = [
         { firstName: { contains: search } },
