@@ -85,12 +85,15 @@ const activeProfExam = computed(() => {
 })
 
 // Navigation
-function goToMonitor(examId: string) {
+function goToMonitor(examId: number) {
   router.push(`/monitoring/${examId}`)
 }
 
-function startExamSession(examId: string) {
-  monitoringStore.startMonitoring(examId)
+function startExamSession(examId: number) {
+  const numericExamId = typeof examId === 'string' ? parseInt(examId, 10) : examId
+  if (!Number.isFinite(numericExamId)) return
+
+  monitoringStore.startMonitoring(numericExamId)
   goToMonitor(examId)
 }
 
@@ -281,7 +284,7 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
           <p class="text-xs text-[var(--text-secondary)] mt-1">Starting the midterm session will simulate students entering Room 302 and checking in.</p>
         </div>
         <button
-          @click="startExamSession('exam-1')"
+          @click="startExamSession(1)"
           class="flex items-center gap-2 px-4 py-2 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-98 shrink-0"
         >
           <Play class="h-3.5 w-3.5 fill-current" />
@@ -298,7 +301,7 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
           </div>
         </div>
         <button
-          @click="goToMonitor('exam-1')"
+          @click="goToMonitor(1)"
           class="flex items-center gap-1.5 px-4 py-2 bg-[#041627] hover:bg-[#0d2a45] text-white rounded-lg text-xs font-bold transition-all shrink-0"
         >
           Open Seating Map

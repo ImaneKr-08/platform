@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useClassroomsStore, type Classroom, type TableLayout } from '../stores/classrooms'
-import { Grid, Plus, Edit2, Trash2, ArrowLeft, Armchair, Move, Info } from 'lucide-vue-next'
+import { Grid, Plus, Edit2, Trash2, ArrowLeft, Armchair, Move } from 'lucide-vue-next'
 
 const classroomsStore = useClassroomsStore()
 
 // View states: 'list' | 'design'
 const viewMode = ref<'list' | 'design'>('list')
-const selectedRoomId = ref<string | null>(null)
+const selectedRoomId = ref<number | null>(null)
 
 // Create Classroom Form state
 const isCreateOpen = ref(false)
@@ -21,36 +21,41 @@ const activeRoom = computed(() => {
   return classroomsStore.classrooms.find(r => r.id === selectedRoomId.value) || null
 })
 
+function tableAt(
+  x: number,
+  y: number,
+) {
+  return activeRoom.value?.tables.find(
+    table =>
+      table.positionX === x &&
+      table.positionY === y,
+  )
+}
+
 // Tables in pool
-const seatPool = computed(() => {
+const gridCells = computed(() => {
   if (!activeRoom.value) return []
-  return activeRoom.value.tables.filter(t => t.slotIndex === null)
-})
 
-// Grid occupied items
-const gridSlots = computed(() => {
-  if (!activeRoom.value) return []
-  const slotsCount = activeRoom.value.rows * activeRoom.value.cols
-  const slots = Array<TableLayout | null>(slotsCount).fill(null)
-  
-  activeRoom.value.tables.forEach(table => {
-    if (table.slotIndex !== null && table.slotIndex < slotsCount) {
-      slots[table.slotIndex] = table
+  const cells = []
+
+  for (let y = 0; y < activeRoom.value.rows; y++) {
+    for (let x = 0; x < activeRoom.value.cols; x++) {
+      cells.push({ x, y })
     }
-  })
-  return slots
-})
+  }
 
+  return cells
+})
 onMounted(() => {
   classroomsStore.initClassrooms()
 })
 
 // Drag and drop states
-const draggedTableId = ref<string | null>(null)
+const draggedTableId = ref<number | null>(null)
 const newTableCode = ref('')
 const designerError = ref('')
 
-function openDesigner(roomId: string) {
+function openDesigner(roomId: number) {
   selectedRoomId.value = roomId
   viewMode.value = 'design'
   newTableCode.value = ''
@@ -62,29 +67,30 @@ function closeDesigner() {
   selectedRoomId.value = null
 }
 
-function handleCreateRoom() {
+async function handleCreateRoom() {
   if (!newRoomName.value.trim()) return
-  classroomsStore.addClassroom(
+
+  await classroomsStore.addClassroom(
     newRoomName.value,
     newRoomRows.value,
     newRoomCols.value,
-    newRoomTablesCount.value
   )
+
   newRoomName.value = ''
   isCreateOpen.value = false
 }
 
-function handleDeleteRoom(id: string) {
-  if (confirm('Are you sure you want to delete this classroom? All saved layouts will be lost.')) {
-    classroomsStore.deleteClassroom(id)
+async function handleDeleteRoom(id: number) {
+  if (confirm('Are you sure you want to delete this classroom?')) {
+    await classroomsStore.deleteClassroom(id)
   }
 }
 
 // Drag & drop logic
-function onDragStart(e: DragEvent, tableId: string) {
-  draggedTableId.value = tableId
+function onDragStart(e: DragEvent, tableId: number) {
+  draggedTableId.value = Number(tableId)
   if (e.dataTransfer) {
-    e.dataTransfer.setData('text/plain', tableId)
+    e.dataTransfer.setData('text/plain',(tableId).toString())
     e.dataTransfer.effectAllowed = 'move'
   }
 }
@@ -93,82 +99,95 @@ function onDragEnd() {
   draggedTableId.value = null
 }
 
-function onDropToGrid(e: DragEvent, targetSlotIndex: number) {
+async function onDropToGrid(
+  e: DragEvent,
+  x: number,
+  y: number,
+) {
   e.preventDefault()
-  if (!activeRoom.value) return
-  
-  const tableId = e.dataTransfer?.getData('text/plain') || draggedTableId.value
-  if (!tableId) return
 
-  const currentTables = [...activeRoom.value.tables]
-  const draggedTable = currentTables.find(t => t.id === tableId)
-  if (!draggedTable) return
-
-  // Check if a desk already occupies this spot
-  const occupyingTable = currentTables.find(t => t.slotIndex === targetSlotIndex)
-  if (occupyingTable) {
-    // Swap: Move occupying table to the dragged table's original spot (could be null / seat pool)
-    occupyingTable.slotIndex = draggedTable.slotIndex
-  }
-  
-  draggedTable.slotIndex = targetSlotIndex
-  
-  // Save updated coordinates
-  classroomsStore.updateRoomLayout(activeRoom.value.id, currentTables, activeRoom.value.rows, activeRoom.value.cols)
-  draggedTableId.value = null
-}
-
-function onDropToPool(e: DragEvent) {
-  e.preventDefault()
   if (!activeRoom.value) return
 
-  const tableId = e.dataTransfer?.getData('text/plain') || draggedTableId.value
+  const tableId =
+    Number(
+      e.dataTransfer?.getData('text/plain')
+    ) || draggedTableId.value
+
   if (!tableId) return
 
-  const currentTables = [...activeRoom.value.tables]
-  const draggedTable = currentTables.find(t => t.id === tableId)
-  if (!draggedTable) return
+  const table =
+    activeRoom.value.tables.find(
+      t => t.id === tableId,
+    )
 
-  // Remove slot index so it falls back to the pool
-  draggedTable.slotIndex = null
-  classroomsStore.updateRoomLayout(activeRoom.value.id, currentTables, activeRoom.value.rows, activeRoom.value.cols)
-  draggedTableId.value = null
-}
+  if (!table) return
+try {
+  await classroomsStore.moveTable(
+    table.id,
+    x,
+    y,
+  )
 
-function addNewTable() {
-  if (!activeRoom.value || !newTableCode.value.trim()) return
   designerError.value = ''
-  
-  const res = classroomsStore.addTableToRoom(activeRoom.value.id, newTableCode.value.trim().toUpperCase())
-  if (res.success) {
-    newTableCode.value = ''
-  } else {
-    designerError.value = res.message || 'Error adding desk.'
-  }
+}
+catch (error: any) {
+  designerError.value =
+    error?.response?.data?.message ??
+    'Unable to move table'
 }
 
-function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
+  draggedTableId.value = null
+}
+
+
+async function addNewTable() {
   if (!activeRoom.value) return
-  let newRows = activeRoom.value.rows
-  let newCols = activeRoom.value.cols
-  
-  if (dimension === 'rows') {
-    newRows = Math.max(1, newRows + delta)
-  } else {
-    newCols = Math.max(1, newCols + delta)
+
+  const firstEmptyCell =
+    gridCells.value.find(
+      cell =>
+        !tableAt(
+          cell.x,
+          cell.y,
+        ),
+    )
+
+  if (!firstEmptyCell) {
+    designerError.value =
+      'No available positions'
+    return
   }
 
-  // Any tables exceeding the new grid limit should be returned to the pool
-  const maxSlots = newRows * newCols
-  const updatedTables = activeRoom.value.tables.map(t => {
-    if (t.slotIndex !== null && t.slotIndex >= maxSlots) {
-      return { ...t, slotIndex: null }
-    }
-    return t
-  })
-
-  classroomsStore.updateRoomLayout(activeRoom.value.id, updatedTables, newRows, newCols)
+  await classroomsStore.addTableToRoom(
+    activeRoom.value.id,
+    firstEmptyCell.x,
+    firstEmptyCell.y,
+  )
 }
+
+async function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
+  if (!activeRoom.value) return
+
+  const newValue = dimension === 'rows' 
+    ? activeRoom.value.rows + delta 
+    : activeRoom.value.cols + delta
+
+  if (newValue < 2 || newValue > 8) return
+
+  if (dimension === 'rows') {
+    activeRoom.value.rows = newValue
+  } else {
+    activeRoom.value.cols = newValue
+  }
+
+  await classroomsStore.updateClassroom(
+  activeRoom.value.id,
+  activeRoom.value.rows,
+  activeRoom.value.cols,
+)
+}
+
+
 </script>
 
 <template>
@@ -347,39 +366,7 @@ function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
           </div>
 
           <!-- Seat Pool (tables with slotIndex === null) -->
-          <div class="bg-[var(--bg-secondary)] border border-[var(--border-color)] p-5 rounded-xl shadow-xs flex flex-col">
-            <h4 class="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-2 flex justify-between items-center">
-              <span>Seat Pool</span>
-              <span class="px-2 py-0.5 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-full text-[10px]">{{ seatPool.length }}</span>
-            </h4>
-            <p class="text-[10px] text-[var(--text-muted)] mb-4">Unassigned tables. Drag these onto the grid map.</p>
-
-            <div
-              class="grid grid-cols-2 gap-2.5 p-3 min-h-[180px] max-h-[300px] overflow-y-auto border border-dashed border-[var(--border-color)] rounded-lg bg-[var(--bg-primary)]"
-              @dragover.prevent
-              @drop="onDropToPool"
-            >
-              <div
-                v-for="table in seatPool"
-                :key="table.id"
-                class="flex items-center justify-between p-2.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-xs font-bold text-[var(--text-primary)] shadow-xs select-none cursor-grab active:cursor-grabbing hover:border-[#026783] transition-all shrink-0"
-                draggable="true"
-                @dragstart="onDragStart($event, table.id)"
-                @dragend="onDragEnd"
-              >
-                <div class="flex items-center gap-1.5 truncate">
-                  <Armchair class="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span class="font-mono">{{ table.code }}</span>
-                </div>
-                <Move class="h-3 w-3 text-[var(--text-muted)] shrink-0" />
-              </div>
-
-              <div v-if="seatPool.length === 0" class="col-span-2 flex flex-col items-center justify-center text-center py-12 text-[var(--text-muted)]">
-                <Info class="h-4.5 w-4.5 mb-1" />
-                <span class="text-[10px]">Pool Empty</span>
-              </div>
-            </div>
-          </div>
+         
         </div>
 
         <!-- Center: Interactive Seating Blueprint Grid -->
@@ -399,20 +386,20 @@ function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
               }"
             >
               <div
-                v-for="(slot, idx) in gridSlots"
-                :key="idx"
+                v-for="cell in gridCells"
+                :key="`${cell.x}-${cell.y}`"
                 class="w-32 h-24 relative"
               >
                 <!-- Placed desk card -->
                 <div
-                  v-if="slot"
+                  v-if="tableAt(cell.x, cell.y)"
                   class="absolute inset-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] border-b-4 border-b-[#026783] rounded-lg shadow-sm p-2 flex flex-col justify-between hover:scale-105 transition-all select-none cursor-grab active:cursor-grabbing hover:border-[#026783]"
                   draggable="true"
-                  @dragstart="onDragStart($event, slot.id)"
+                  @dragstart="onDragStart($event, tableAt(cell.x, cell.y)!.id)"
                   @dragend="onDragEnd"
                 >
                   <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-                    <span class="font-mono font-bold">{{ slot.code }}</span>
+                    <span class="font-mono font-bold">{{ tableAt(cell.x, cell.y)?.qrCode }}</span>
                     <Move class="h-3 w-3" />
                   </div>
                   
@@ -431,7 +418,7 @@ function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
                   v-else
                   class="absolute inset-0 border-2 border-dashed border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-500 rounded-lg flex items-center justify-center transition-colors text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold cursor-default"
                   @dragover.prevent
-                  @drop="onDropToGrid($event, idx)"
+                  @drop="onDropToGrid($event, cell.x, cell.y)"
                 >
                   Empty Spot
                 </div>

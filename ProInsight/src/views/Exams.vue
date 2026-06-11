@@ -6,7 +6,8 @@ import { useClassroomsStore } from '../stores/classrooms'
 import { useProfessorsStore } from '../stores/professors'
 import { useMonitoringStore } from '../stores/monitoring'
 import Modal from '../components/Modal.vue'
-import { Plus, Edit2, Trash2, Play, AlertCircle, Clock, MapPin, UserCheck, CheckCircle } from 'lucide-vue-next'
+import { Plus, Edit2, Trash2, Play, AlertCircle, Clock, MapPin, UserCheck, CheckCircle, Activity } from 'lucide-vue-next'
+import {api} from '../services/api'
 
 const router = useRouter()
 const examsStore = useExamsStore()
@@ -22,16 +23,17 @@ const errorMsg = ref('')
 const formModel = ref<Omit<Exam, 'id' | 'status'>>({
   name: '',
   subject: '',
-  classroomId: '',
+  classroomId: 0,
   classroomName: '',
   professorEmail: '',
+  professorId: 0,
   professorName: '',
   date: '',
   startTime: '',
   endTime: ''
 })
 
-const editingExamId = ref<string | null>(null)
+const editingExamId = ref<number | null>(null)
 
 onMounted(() => {
   examsStore.initExams()
@@ -47,9 +49,10 @@ function openAddModal() {
   formModel.value = {
     name: '',
     subject: '',
-    classroomId: classroomsStore.classrooms[0]?.id || '',
+    classroomId: classroomsStore.classrooms[0]?.id || 0,
     classroomName: classroomsStore.classrooms[0]?.name || '',
     professorEmail: professorsStore.professors[0]?.email || '',
+    professorId: professorsStore.professors[0]?.id || 0,
     professorName: professorsStore.professors[0]?.name || '',
     date: new Date().toISOString().split('T')[0],
     startTime: '09:00',
@@ -70,6 +73,7 @@ function openEditModal(exam: Exam) {
     classroomId: exam.classroomId,
     classroomName: exam.classroomName,
     professorEmail: exam.professorEmail,
+    professorId: exam.professorId,
     professorName: exam.professorName,
     date: exam.date,
     startTime: exam.startTime,
@@ -79,49 +83,79 @@ function openEditModal(exam: Exam) {
   isFormModalOpen.value = true
 }
 
-function handleSave() {
+async function handleSave() {
   if (!formModel.value.name || !formModel.value.subject || !formModel.value.date) {
     errorMsg.value = 'Name, subject, and date are required.'
     return
   }
 
   // Resolve classroom name
-  const classroomObj = classroomsStore.classrooms.find(c => c.id === formModel.value.classroomId)
+  const classroomObj = classroomsStore.classrooms.find(c => (c.id) === (formModel.value.classroomId))
   if (classroomObj) {
     formModel.value.classroomName = classroomObj.name
   }
 
   // Resolve professor name
-  const profObj = professorsStore.professors.find(p => p.email === formModel.value.professorEmail)
+  const profObj = professorsStore.professors.find(p => (p.id) === (formModel.value.professorId))
   if (profObj) {
     formModel.value.professorName = profObj.name
   }
 
   if (modalMode.value === 'add') {
-    examsStore.addExam({
-      ...formModel.value,
-      status: 'scheduled'
-    })
-  } else if (editingExamId.value) {
-    examsStore.updateExam(editingExamId.value, formModel.value)
-  }
+  await examsStore.addExam({
+    ...formModel.value,
+    status: 'scheduled',
+  })
+} else if (editingExamId.value !== null) {
+  await examsStore.updateExam(
+    editingExamId.value,
+    formModel.value,
+  )
+}
 
   isFormModalOpen.value = false
 }
 
-function handleDelete(id: string) {
+async function handleDelete(id: number) {
   if (confirm('Are you sure you want to delete this exam?')) {
-    examsStore.deleteExam(id)
+    await examsStore.deleteExam(id)
   }
 }
 
-function startExamSession(examId: string) {
-  monitoringStore.startMonitoring(examId)
-  router.push(`/monitoring/${examId}`)
+async function startExamSession(examId: number) {
+  try {
+    const response = await api.post(
+      `/exams/${examId}/start`,
+    )
+
+    console.log(response.data)
+
+    await examsStore.initExams()
+
+    await monitoringStore.startMonitoring(
+      examId,
+    )
+
+    router.push(`/monitoring/${examId}`)
+  } catch (error: any) {
+  console.log('STATUS:', error.response?.status)
+  console.log('DATA:', error.response?.data)
+}
 }
 
-function stopExamSession(examId: string) {
+async function stopExamSession() {
+  const examId =
+    monitoringStore.activeExamId
+
+  if (examId == null) return
+
+  await api.post(
+    `/exams/${examId}/end`,
+  )
+
   monitoringStore.stopMonitoring()
+
+  await examsStore.initExams()
 }
 </script>
 
@@ -284,10 +318,10 @@ function stopExamSession(examId: string) {
           <div>
             <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Assign Proctor Professor</label>
             <select
-              v-model="formModel.professorEmail"
+              v-model="formModel.professorId"
               class="input-field"
             >
-              <option v-for="prof in professorsStore.professors" :key="prof.email" :value="prof.email">{{ prof.name }} ({{ prof.department }})</option>
+              <option v-for="prof in professorsStore.professors" :key="prof.id" :value="prof.id">{{ prof.name }} ({{ prof.department }})</option>
             </select>
           </div>
         </div>

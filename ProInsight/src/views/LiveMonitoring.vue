@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMonitoringStore } from '../stores/monitoring'
+import { useMonitoringStore, type MonitorDesk } from '../stores/monitoring'
 import { useExamsStore } from '../stores/exams'
 import { useAuthStore } from '../stores/auth'
 import {
@@ -28,34 +28,61 @@ const examsStore = useExamsStore()
 const authStore = useAuthStore()
 
 // State
-const selectedExamId = ref('')
+const selectedExamId = ref<number | null>(null)
 
 const classroomsStore = useClassroomsStore()
-onMounted(() => {
-  examsStore.initExams()
-  
-  // Resolve exam from URL path
-  const examIdParam = route.params.examId as string
+onMounted(async () => {
+  await examsStore.initExams()
+  await classroomsStore.initClassrooms()
+
+  const examIdParam = route.params.examId as string | undefined
+
+  // URL: /monitoring/:examId
   if (examIdParam) {
-    selectedExamId.value = examIdParam
-    if (!monitoringStore.isSessionActive || monitoringStore.activeExamId !== examIdParam) {
-      // Auto start session if exam matches and is not yet running
-      const exam = examsStore.exams.find(e => e.id === examIdParam)
-      if (exam && exam.status !== 'completed') {
-        monitoringStore.startMonitoring(examIdParam)
-      }
+    const examId = Number(examIdParam)
+
+    selectedExamId.value = examId
+
+    const exam = examsStore.exams.find(
+      e => e.id === examId,
+    )
+
+    if (
+      exam &&
+      exam.status !== 'completed' &&
+      (
+        !monitoringStore.isSessionActive ||
+        monitoringStore.activeExamId !== examId
+      )
+    ) {
+      await monitoringStore.startMonitoring(
+        examId,
+      )
     }
-  } else if (monitoringStore.isSessionActive && monitoringStore.activeExamId) {
-    selectedExamId.value = monitoringStore.activeExamId
-  } else {
-    // Pick first available active or scheduled exam
-    const availableExams = filteredExamsList.value
-    if (availableExams.length > 0) {
-      selectedExamId.value = availableExams[0].id
-    }
+
+    return
+  }
+
+  // Existing active session
+  if (
+    monitoringStore.isSessionActive &&
+    monitoringStore.activeExamId
+  ) {
+    selectedExamId.value =
+      monitoringStore.activeExamId
+
+    return
+  }
+
+  // First available exam
+  const firstExam =
+    filteredExamsList.value[0]
+
+  if (firstExam) {
+    selectedExamId.value =
+      firstExam.id
   }
 })
-
 // Filter exams based on role
 const filteredExamsList = computed(() => {
   if (authStore.isAdmin) {
@@ -64,69 +91,100 @@ const filteredExamsList = computed(() => {
     return examsStore.exams.filter(e => e.professorEmail.toLowerCase() === authStore.user?.email.toLowerCase())
   }
 })
-
+watch(
+  filteredExamsList,
+  exams => {
+    if (
+      !selectedExamId.value &&
+      exams.length > 0
+    ) {
+      selectedExamId.value =
+        exams[0].id
+    }
+  },
+  { immediate: true },
+)
 const isCurrentSessionSelected = computed(() => {
-  return monitoringStore.isSessionActive && monitoringStore.activeExamId === selectedExamId.value
+  return (
+    monitoringStore.isSessionActive &&
+    monitoringStore.activeExamId === selectedExamId.value
+  )
 })
 
 const currentExam = computed(() => {
-  return examsStore.exams.find(e => e.id === selectedExamId.value) || null
+  return (
+    examsStore.exams.find(
+      e => e.id === selectedExamId.value,
+    ) || null
+  )
+})
+const currentClassroom = computed(() => {
+  if (!monitoringStore.activeExam) return null
+
+  return classroomsStore.classrooms.find(
+    c => c.id === monitoringStore.activeExam?.classroomId,
+  )
+})
+// classroom slots
+const monitoringGridCells = computed(() => {
+  if (!currentClassroom.value) return []
+
+  const cells = []
+
+  for (let y = 0; y < currentClassroom.value.rows; y++) {
+    for (let x = 0; x < currentClassroom.value.cols; x++) {
+      cells.push({
+        x,
+        y,
+        desk: monitorDeskAt(x, y)
+      })
+    }
+  }
+
+  return cells
 })
 
-// Drag and drop variables
-const draggedDeskId = ref<string | null>(null)
-
-function onDragStart(e: DragEvent, deskId: string) {
-  if (!authStore.isAdmin) return // Only admins can reposition desking layout
-  draggedDeskId.value = deskId
-  if (e.dataTransfer) {
-    e.dataTransfer.setData('text/plain', deskId)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-}
-
-function onDragEnd() {
-  draggedDeskId.value = null
-}
-
-function onDrop(e: DragEvent, targetSlotIndex: number) {
-  e.preventDefault()
-  if (!authStore.isAdmin) return
-  
-  const deskId = e.dataTransfer?.getData('text/plain') || draggedDeskId.value
-  if (!deskId) return
-
-  monitoringStore.updateSeatingPosition(deskId, targetSlotIndex)
-  draggedDeskId.value = null
-}
-
-function onDropToPool(e: DragEvent) {
-  e.preventDefault()
-  if (!authStore.isAdmin) return
-
-  const deskId = e.dataTransfer?.getData('text/plain') || draggedDeskId.value
-  if (!deskId) return
-
-  monitoringStore.updateSeatingPosition(deskId, null)
-  draggedDeskId.value = null
-}
-
-function startSession() {
+async function startSession() {
   if (!selectedExamId.value) return
-  monitoringStore.startMonitoring(selectedExamId.value)
+  await monitoringStore.startMonitoring(selectedExamId.value)
   router.push(`/monitoring/${selectedExamId.value}`)
 }
 
-function stopSession() {
+async function stopSession() {
   if (confirm('Are you sure you want to end this monitoring session? This will finalize the exam.')) {
-    monitoringStore.stopMonitoring()
+    await monitoringStore.stopMonitoring()
+    console.log('AFTER', monitoringStore.isSessionActive)
     router.push('/')
   }
 }
+function monitorDeskAt(
+  x: number,
+  y: number,
+): MonitorDesk | null {
+  if (!currentClassroom.value) return null
+
+  const table = currentClassroom.value.tables.find(
+    t =>
+      t.positionX === x &&
+      t.positionY === y,
+  )
+
+  if (!table) return null
+
+  return (
+    monitoringStore.desks.find(
+      d => Number(d.id) === table.id,
+    ) || null
+  )
+}
+
+function getDesk(x: number, y: number): MonitorDesk | null {
+  return monitorDeskAt(x, y)
+}
 </script>
 
-<template>
-  <div class="flex flex-col h-[calc(100vh-8rem)] select-none animate-fade-in overflow-hidden">
+<template  v-if="monitorDeskAt(cell.x, cell.y) ">
+  <div class="flex flex-col h-[calc(100vh-8rem)] select-none animate-fade-in overflow-auto">
     
     <!-- IF NO EXAM ACTIVE OR SELECTED -->
     <div v-if="!monitoringStore.isSessionActive || !isCurrentSessionSelected" class="flex-1 flex flex-col items-center justify-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-sm text-center">
@@ -162,10 +220,9 @@ function stopSession() {
     </div>
 
     <!-- LIVE MONITORING DASHBOARD -->
-    <div v-else class="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+    <div v-else class="flex-1 flex flex-col lg:flex-row gap-6 overflow-auto">
       
-      <!-- Right Side: The Seating Grid Layout -->
-      <div class="flex-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-sm flex flex-col overflow-hidden">
+      <div class="flex-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-sm flex flex-col overflow-visible">
         
         <!-- Header Info Bar -->
         <div class="px-6 py-4 border-b border-[var(--border-color)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 bg-[var(--bg-primary)]/35">
@@ -180,7 +237,7 @@ function stopSession() {
             </div>
           </div>
 
-          <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
             <!-- Silence all trigger -->
             <button
               @click="monitoringStore.toggleSilenceAll"
@@ -209,42 +266,51 @@ function stopSession() {
             v-if="monitoringStore.activeExam"
             class="grid gap-6 w-fit"
             :style="{
-              gridTemplateColumns: `repeat(${classroomsStore.classrooms.find(c => c.id === monitoringStore.activeExam?.classroomId)?.cols || 4}, minmax(0, 1fr))`
+              gridTemplateColumns: `repeat(${currentClassroom?.cols || 4}, minmax(0,1fr))`
             }"
           >
             <div
-              v-for="(desk, index) in monitoringStore.gridSlots"
-              :key="index"
+              v-for="cell in monitoringGridCells"
+              :key="`${cell.x}-${cell.y}`"
               class="w-48 h-36 relative"
             >
               <!-- Placed Desk Card -->
+               <template v-if="getDesk(cell.x, cell.y)">
               <div
-                v-if="desk"
+                v-if="monitorDeskAt(cell.x, cell.y)"
                 class="absolute inset-0 bg-[var(--bg-secondary)] border rounded-xl shadow-md p-3 flex flex-col justify-between select-none relative group"
-                :class="{
-                  'border-rose-500 glow-red border-l-4 border-l-rose-500': desk.student && desk.student.connected && desk.student.stressLevel === 'HIGH_STRESS',
-                  'border-amber-500 glow-yellow border-l-4 border-l-amber-500': desk.student && desk.student.connected && desk.student.stressLevel === 'MILD_STRESS',
-                  'border-emerald-500 border-l-4 border-l-emerald-500': desk.student && desk.student.connected && desk.student.stressLevel === 'BASELINE',
-                  'border-[var(--border-color)]': !desk.student || !desk.student.connected,
-                  'cursor-grab active:cursor-grabbing hover:scale-103 transition-transform duration-100': authStore.isAdmin
-                }"
-                :draggable="authStore.isAdmin"
-                @dragstart="onDragStart($event, desk.id)"
-                @dragend="onDragEnd"
+    :class="{
+      'border-rose-500 glow-red border-l-4 border-l-rose-500':
+        cell.desk?.student?.connected &&
+        cell.desk?.student?.stressLevel === 'HIGH_STRESS',
+
+      'border-amber-500 glow-yellow border-l-4 border-l-amber-500':
+        cell.desk?.student?.connected &&
+        cell.desk?.student?.stressLevel === 'MILD_STRESS',
+
+      'border-emerald-500 border-l-4 border-l-emerald-500':
+        cell.desk?.student?.connected &&
+        cell.desk?.student?.stressLevel === 'BASELINE',
+
+      'border-[var(--border-color)]':
+        !cell.desk?.student ||
+        !cell.desk?.student.connected
+    }"
+              
               >
                 <!-- Desk Header -->
                 <div class="flex items-center justify-between text-[10px] shrink-0 font-bold">
-                  <span class="font-mono text-slate-500">{{ desk.code }}</span>
+                  <span class="font-mono text-slate-500">{{ cell.desk?.code }}</span>
                   
-                  <span v-if="desk.student && desk.student.connected"
+                  <span v-if="cell.desk?.student && cell.desk?.student.connected"
                         :class="{
-                          'text-rose-600 dark:text-rose-400': desk.student.stressLevel === 'HIGH_STRESS',
-                          'text-amber-600 dark:text-amber-400': desk.student.stressLevel === 'MILD_STRESS',
-                          'text-emerald-600 dark:text-emerald-400': desk.student.stressLevel === 'BASELINE'
+                          'text-rose-600 dark:text-rose-400': cell.desk?.student.stressLevel === 'HIGH_STRESS',
+                          'text-amber-600 dark:text-amber-400': cell.desk?.student.stressLevel === 'MILD_STRESS',
+                          'text-emerald-600 dark:text-emerald-400': cell.desk?.student.stressLevel === 'BASELINE'
                         }">
-                    {{ desk.student.stressLevel }}
+                    {{ cell.desk?.student.stressLevel }}
                   </span>
-                  <span v-else-if="desk.student && !desk.student.connected" class="text-slate-400 flex items-center gap-0.5">
+                  <span v-else-if="cell.desk?.student && !cell.desk?.student.connected" class="text-slate-400 flex items-center gap-0.5">
                     <WifiOff class="h-3 w-3" /> OFFLINE
                   </span>
                   <span v-else class="text-slate-400 font-normal">EMPTY</span>
@@ -253,35 +319,35 @@ function stopSession() {
                 <!-- Student Details -->
                 <div class="flex-1 flex flex-col justify-center min-w-0 py-1 select-text">
                   <p class="text-xs font-bold text-[var(--text-primary)] truncate">
-                    {{ desk.student ? `${desk.student.firstName} ${desk.student.lastName}` : 'Unassigned Seat' }}
+                    {{ cell.desk?.student ? `${cell.desk?.student.firstName} ${cell.desk?.student.lastName}` : 'Unassigned Seat' }}
                   </p>
                   <p class="text-[9px] text-[var(--text-muted)] font-mono leading-none mt-0.5 truncate">
-                    {{ desk.student ? desk.student.registrationNumber : 'Desks QR Scannable' }}
+                    {{ cell.desk?.student ? cell.desk?.student.registrationNumber : 'Desks QR Scannable' }}
                   </p>
                 </div>
 
                 <!-- Live Metrics Bar -->
-                <div v-if="desk.student && desk.student.connected" class="space-y-1.5 shrink-0">
+                <div v-if="cell.desk?.student && cell.desk?.student.connected" class="space-y-1.5 shrink-0">
                   <div class="flex items-center justify-between text-[10px] font-semibold">
                     <span class="flex items-center gap-0.5 text-slate-500">
                       <Heart class="h-3 w-3 text-rose-500 fill-rose-500 shrink-0" />
-                      {{ desk.student.heartRate }} BPM
+                      {{ cell.desk?.student.heartRate }} BPM
                     </span>
-                    <span class="text-[var(--text-primary)]">{{ desk.student.stressPercent }}% stress</span>
+                    <span class="text-[var(--text-primary)]">{{ cell.desk?.student.stressPercent }}% stress</span>
                   </div>
                   <div class="h-1 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
                     <div class="h-full transition-all duration-300"
                          :class="{
-                           'bg-rose-500': desk.student.stressLevel === 'HIGH_STRESS',
-                           'bg-amber-500': desk.student.stressLevel === 'MILD_STRESS',
-                           'bg-emerald-500': desk.student.stressLevel === 'BASELINE'
+                           'bg-rose-500': cell.desk?.student.stressLevel === 'HIGH_STRESS',
+                           'bg-amber-500': cell.desk?.student.stressLevel === 'MILD_STRESS',
+                           'bg-emerald-500': cell.desk?.student.stressLevel === 'BASELINE'
                          }"
-                         :style="{ width: `${desk.student.stressPercent}%` }">
+                         :style="{ width: `${cell.desk?.student.stressPercent}%` }">
                     </div>
                   </div>
                 </div>
 
-                <div v-else-if="desk.student && !desk.student.connected" class="text-[10px] text-rose-500 font-semibold flex items-center gap-1.5 border border-dashed border-rose-200 bg-rose-50/20 px-2 py-1 rounded">
+                <div v-else-if="cell.desk?.student && !cell.desk?.student.connected" class="text-[10px] text-rose-500 font-semibold flex items-center gap-1.5 border border-dashed border-rose-200 bg-rose-50/20 px-2 py-1 rounded">
                   <AlertTriangle class="h-3.5 w-3.5" /> Wearable Lost Link
                 </div>
 
@@ -291,28 +357,28 @@ function stopSession() {
 
                 <!-- Individual Silence triggers -->
                 <button
-                  v-if="desk.student && desk.student.connected && (desk.student.stressLevel === 'HIGH_STRESS' || desk.student.stressLevel === 'MILD_STRESS')"
-                  @click.stop="monitoringStore.toggleSilenceStudent(desk.id)"
+                  v-if="cell.desk?.student && cell.desk?.student.connected && (cell.desk?.student.stressLevel === 'HIGH_STRESS' || cell.desk?.student.stressLevel === 'MILD_STRESS')"
+                  @click.stop="monitoringStore.toggleSilenceStudent(cell.desk.id)"
                   class="absolute top-8 right-3 p-1 rounded-md bg-[var(--bg-primary)] border border-[var(--border-color)] text-[var(--text-secondary)] shadow-sm hover:scale-105 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  :title="desk.student.isSilenced ? 'Unsilence Alerts' : 'Silence Alerts'"
+                  :title="cell.desk?.student.isSilenced ? 'Unsilence Alerts' : 'Silence Alerts'"
                 >
-                  <component :is="desk.student.isSilenced ? Volume2 : VolumeX" class="h-3.5 w-3.5" />
+                  <component :is="cell.desk?.student.isSilenced ? Volume2 : VolumeX" class="h-3.5 w-3.5" />
                 </button>
 
                 <!-- Wooden desk pegs -->
                 <div class="absolute -bottom-1 left-3 w-1.5 h-1.5 bg-slate-400 rounded-sm"></div>
                 <div class="absolute -bottom-1 right-3 w-1.5 h-1.5 bg-slate-400 rounded-sm"></div>
               </div>
-
               <!-- Grid Spot Dropzone Target (Only Admins can drag coordinates) -->
               <div
                 v-else
                 class="absolute inset-0 border-2 border-dashed border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-500 rounded-xl flex items-center justify-center transition-colors text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold"
                 @dragover.prevent
-                @drop="onDrop($event, index)"
+        
               >
                 Empty Spot
-              </div>
+             </div>
+            </template>
             </div>
           </div>
         </div>
@@ -355,26 +421,24 @@ function stopSession() {
         <div v-if="authStore.isAdmin" class="bg-[var(--bg-secondary)] border border-[var(--border-color)] p-5 rounded-2xl shadow-sm flex flex-col shrink-0">
           <h4 class="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-2 flex justify-between items-center">
             <span>Seat Pool</span>
-            <span class="px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-full text-[9px]">{{ monitoringStore.seatPool.length }}</span>
+            <span class="px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-full text-[9px]">{{ monitoringStore.desks.length }}</span>
           </h4>
           
           <div
             class="flex gap-2 p-2.5 min-h-[50px] overflow-x-auto border border-dashed border-[var(--border-color)] rounded-lg bg-[var(--bg-primary)] scrollbar-thin"
-            @dragover.prevent
-            @drop="onDropToPool"
+          
           >
             <div
-              v-for="desk in monitoringStore.seatPool"
+              v-for="desk in monitoringStore.desks"
               :key="desk.id"
               class="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-xs font-bold text-[var(--text-primary)] shadow-xs select-none cursor-grab active:cursor-grabbing shrink-0"
               draggable="true"
-              @dragstart="onDragStart($event, desk.id)"
-              @dragend="onDragEnd"
+      
             >
               <span class="font-mono">{{ desk.code }}</span>
             </div>
             
-            <span v-if="monitoringStore.seatPool.length === 0" class="text-[10px] text-[var(--text-muted)] mx-auto py-1">
+            <span v-if="monitoringStore.desks.length === 0" class="text-[10px] text-[var(--text-muted)] mx-auto py-1">
               All seats placed on map
             </span>
           </div>

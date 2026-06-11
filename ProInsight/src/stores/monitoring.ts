@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useStudentsStore, type Student } from './students'
 import { useClassroomsStore } from './classrooms'
 import { useExamsStore } from './exams'
+import { api } from '../services/api'
 
 export interface MonitorStudent {
   firstName: string
@@ -19,7 +20,6 @@ export interface MonitorStudent {
 export interface MonitorDesk {
   id: string
   code: string
-  slotIndex: number | null
   student: MonitorStudent | null
 }
 
@@ -35,7 +35,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   const classroomsStore = useClassroomsStore()
   const examsStore = useExamsStore()
 
-  const activeExamId = ref<string | null>(null)
+  const activeExamId = ref<number | null>(null)
   const isSessionActive = ref(false)
   const desks = ref<MonitorDesk[]>([])
   const timeRemainingSeconds = ref(7200) // 2 hours default
@@ -46,7 +46,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   let timerInterval: number | null = null
 
   const activeExam = computed(() => {
-    return examsStore.exams.find(e => e.id === activeExamId.value) || null
+    return examsStore.exams.find(e => (e.id) === activeExamId.value) || null
   })
 
   // Connected count
@@ -68,24 +68,29 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   })
 
   // Get seats in the seat pool
-  const seatPool = computed(() => {
-    return desks.value.filter(d => d.slotIndex === null)
-  })
 
   // Get grid slots
   const gridSlots = computed(() => {
-    if (!activeExam.value) return []
-    const room = classroomsStore.classrooms.find(c => c.id === activeExam.value?.classroomId)
+    const exam = activeExam.value
+    if (!exam) return []
+
+    const room = classroomsStore.classrooms.find(
+      c => c.id === exam.classroomId,
+    )
+
     if (!room) return []
-    
-    const slotsCount = room.rows * room.cols
-    const slots = Array<MonitorDesk | null>(slotsCount).fill(null)
-    
-    desks.value.forEach(desk => {
-      if (desk.slotIndex !== null && desk.slotIndex < slotsCount) {
-        slots[desk.slotIndex] = desk
+
+    const totalSlots = room.rows * room.cols
+
+    const slots: (MonitorDesk | null)[] =
+      Array(totalSlots).fill(null)
+
+    desks.value.forEach((desk, index) => {
+      if (index < totalSlots) {
+        slots[index] = desk
       }
     })
+
     return slots
   })
 
@@ -103,60 +108,128 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     }
   }
 
-  function startMonitoring(examId: string) {
+  async function startMonitoring(
+    examId: number,
+  ) {
+    if (simulationInterval) {
+      clearInterval(simulationInterval)
+    }
+
+    if (timerInterval) {
+      clearInterval(timerInterval)
+    }
+
     activeExamId.value = examId
     isSessionActive.value = true
-    timeRemainingSeconds.value = 5400 + Math.floor(Math.random() * 1800) // 1.5 to 2 hours
+
+    timeRemainingSeconds.value =
+      5400 + Math.floor(Math.random() * 1800)
+
     activityLogs.value = []
-    
-    // Ensure all stores are initialized
-    studentsStore.initStudents()
-    classroomsStore.initClassrooms()
 
-    // Find the associated classroom
-    const exam = examsStore.exams.find(e => e.id === examId)
+    await studentsStore.initStudents()
+    await classroomsStore.initClassrooms()
+
+    const exam =
+      examsStore.exams.find(
+        e => e.id === examId,
+      )
+
     if (!exam) return
-    exam.status = 'active'
-    examsStore.saveToStorage()
 
-    const room = classroomsStore.classrooms.find(c => c.id === exam.classroomId)
-    if (!room) return
+    const room =
+      classroomsStore.classrooms.find(
+        c => c.id === exam.classroomId,
+      )
 
-    addLog(`Exam session "${exam.name}" started in ${room.name}.`, 'info')
+    if (!room) {
+      addLog(
+        `Classroom not found for exam ${exam.name}`,
+        'error',
+      )
 
-    // Copy classroom tables to monitor desks (initially unassigned or mock partial setup)
-    desks.value = room.tables.map(t => ({
-      id: t.id,
-      code: t.code,
-      slotIndex: t.slotIndex,
-      student: null
-    }))
+      isSessionActive.value = false
+      activeExamId.value = null
 
-    // Precheck in 2-3 students instantly to show something active
-    const availableStudents = [...studentsStore.students]
-    const initialCheckInCount = Math.min(3, desks.value.length)
-    for (let i = 0; i < initialCheckInCount; i++) {
-      if (availableStudents.length > 0) {
-        const student = availableStudents.splice(Math.floor(Math.random() * availableStudents.length), 1)[0]
-        const emptyDesk = desks.value.find(d => d.slotIndex !== null && !d.student)
+      return
+    }
+
+    addLog(
+      `Exam session "${exam.name}" started in ${room.name}.`,
+      'info',
+    )
+
+    desks.value = room.tables.map(
+      t => ({
+        id: String(t.id),
+        code:
+          t.qrCode ||
+          `DESK-${t.id}`,
+        student: null,
+      }),
+    )
+
+    const availableStudents = [
+      ...studentsStore.students,
+    ]
+
+    const initialCheckInCount =
+      Math.min(
+        3,
+        desks.value.length,
+      )
+
+    for (
+      let i = 0;
+      i < initialCheckInCount;
+      i++
+    ) {
+      if (
+        availableStudents.length > 0
+      ) {
+        const student =
+          availableStudents.splice(
+            Math.floor(
+              Math.random() *
+              availableStudents.length,
+            ),
+            1,
+          )[0]
+
+        const emptyDesk =
+          desks.value.find(
+            d => !d.student,
+          )
+
         if (emptyDesk) {
-          emptyDesk.student = createMonitorStudent(student)
-          addLog(`${student.firstName} ${student.lastName} scanned ${emptyDesk.code} - Device Connected.`, 'success')
+          emptyDesk.student =
+            createMonitorStudent(
+              student,
+            )
+
+          addLog(
+            `${student.firstName} ${student.lastName} scanned ${emptyDesk.code} - Device Connected.`,
+            'success',
+          )
         }
       }
     }
 
-    // Start Simulation tick
-    runSimulator(availableStudents)
+    runSimulator(
+      availableStudents,
+    )
 
-    // Start Timer tick
-    timerInterval = window.setInterval(() => {
-      if (timeRemainingSeconds.value > 0) {
-        timeRemainingSeconds.value--
-      } else {
-        stopMonitoring()
-      }
-    }, 1000)
+    timerInterval =
+      window.setInterval(() => {
+        if (
+          timeRemainingSeconds.value >
+          0
+        ) {
+          timeRemainingSeconds.value--
+        } else {
+          stopMonitoring()
+        }
+      }, 1000)
   }
 
   function createMonitorStudent(s: Student): MonitorStudent {
@@ -215,7 +288,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
         if (emptyDesks.length > 0) {
           const targetDesk = emptyDesks[Math.floor(Math.random() * emptyDesks.length)]
           const student = availableStudents.splice(Math.floor(Math.random() * availableStudents.length), 1)[0]
-          
+
           targetDesk.student = createMonitorStudent(student)
           addLog(`${student.firstName} ${student.lastName} scanned ${targetDesk.code} - Device Connected.`, 'success')
         }
@@ -261,25 +334,38 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     }, 3000)
   }
 
-  function stopMonitoring() {
+  async function stopMonitoring() {
     if (simulationInterval) {
-      clearInterval(simulationInterval)
+      clearInterval(
+        simulationInterval,
+      )
       simulationInterval = null
     }
+
     if (timerInterval) {
-      clearInterval(timerInterval)
+      clearInterval(
+        timerInterval,
+      )
       timerInterval = null
     }
+
     isSessionActive.value = false
-    
+
     if (activeExamId.value) {
-      const exam = examsStore.exams.find(e => e.id === activeExamId.value)
-      if (exam) {
-        exam.status = 'completed'
-        examsStore.saveToStorage()
-        addLog(`Exam session "${exam.name}" completed.`, 'info')
+      try {
+        await api.post(
+          `/exams/${activeExamId.value}/end`
+        )
+      } catch (error) {
+        console.error(
+          'Failed to end exam:',
+          error
+        )
       }
     }
+
+    activeExamId.value = null
+    desks.value = []
   }
 
   function toggleSilenceStudent(deskId: string) {
@@ -295,33 +381,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     addLog(`All student alert noises ${isSilencedAll.value ? 'silenced' : 'unsilenced'}.`, 'info')
   }
 
-  function updateSeatingPosition(draggedId: string, targetSlotIndex: number | null) {
-    const draggedDesk = desks.value.find(d => d.id === draggedId)
-    if (!draggedDesk) return
 
-    // If target index is NOT null, check if occupied
-    if (targetSlotIndex !== null) {
-      const occupiedDesk = desks.value.find(d => d.slotIndex === targetSlotIndex)
-      if (occupiedDesk) {
-        // Swap positions
-        occupiedDesk.slotIndex = draggedDesk.slotIndex
-      }
-    }
-    draggedDesk.slotIndex = targetSlotIndex
-
-    // Sync layout changes to active classroom store if necessary
-    if (activeExam.value) {
-      const updatedTables = desks.value.map(d => ({
-        id: d.id,
-        code: d.code,
-        slotIndex: d.slotIndex
-      }))
-      const room = classroomsStore.classrooms.find(r => r.id === activeExam.value?.classroomId)
-      if (room) {
-        classroomsStore.updateRoomLayout(room.id, updatedTables, room.rows, room.cols)
-      }
-    }
-  }
 
   const formattedTimeRemaining = computed(() => {
     const hours = Math.floor(timeRemainingSeconds.value / 3600)
@@ -341,14 +401,11 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     connectedStudentsCount,
     studentsAtRiskCount,
     classStressIndex,
-    seatPool,
-    gridSlots,
     formattedTimeRemaining,
     startMonitoring,
     stopMonitoring,
     toggleSilenceStudent,
     toggleSilenceAll,
-    updateSeatingPosition,
     addLog
   }
 })
