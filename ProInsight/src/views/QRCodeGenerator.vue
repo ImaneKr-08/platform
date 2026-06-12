@@ -2,12 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useClassroomsStore } from '../stores/classrooms'
 import { QrCode, Download, Printer, Grid, AlertCircle } from 'lucide-vue-next'
+import {api} from '../services/api'
 
 const classroomsStore = useClassroomsStore()
-const selectedRoomId = ref('')
+const selectedRoomId = ref<number | string>('')
 
-onMounted(() => {
-  classroomsStore.initClassrooms()
+const API_URL = (import.meta as any).env.VITE_API_URL ||'http://localhost:3000'
+onMounted( async () => {
+  await classroomsStore.initClassrooms()
   if (classroomsStore.classrooms.length > 0) {
     selectedRoomId.value = classroomsStore.classrooms[0].id
   }
@@ -19,212 +21,162 @@ const activeRoom = computed(() => {
 
 const tables = computed(() => {
   if (!activeRoom.value) return []
-  // Sort tables by code
-  return [...activeRoom.value.tables].sort((a, b) => a.code.localeCompare(b.code))
+
+  return [...activeRoom.value.tables]
+    .sort((a, b) => a.id - b.id)
 })
 
 // Simulated QR download action
-function downloadQR(tableCode: string) {
-  // Generate mock text content (which mobile app scans)
-  const qrData = `proctorinsight://classroom/${selectedRoomId.value}/table/${tableCode}`
-  
-  // Create an SVG element programmatically to download
-  const svgContent = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="300" height="300">
-      <rect width="100" height="100" fill="white"/>
-      <!-- Position Detection Patterns (Finder Squares) -->
-      <path d="M 5 5 h 20 v 20 h -20 z M 9 9 h 12 v 12 h -12 z" fill="#041627"/>
-      <rect x="12" y="12" width="6" height="6" fill="#041627"/>
-      
-      <path d="M 75 5 h 20 v 20 h -20 z M 79 9 h 12 v 12 h -12 z" fill="#041627"/>
-      <rect x="82" y="12" width="6" height="6" fill="#041627"/>
-      
-      <path d="M 5 75 h 20 v 20 h -20 z M 9 79 h 12 v 12 h -12 z" fill="#041627"/>
-      <rect x="12" y="82" width="6" height="6" fill="#041627"/>
-      
-      <!-- Center Text Badge -->
-      <rect x="35" y="42" width="30" height="16" rx="2" fill="#026783"/>
-      <text x="50" y="52" font-family="monospace" font-size="8" fill="white" font-weight="bold" text-anchor="middle">${tableCode}</text>
-      
-      <!-- Random QR Noise Path -->
-      <path d="M 30 10 h 5 v 5 h -5 z M 40 5 h 10 v 5 h -10 z M 55 15 h 5 v 10 h -5 z M 10 35 h 15 v 5 h -15 z M 35 30 h 5 v 5 h -5 z M 70 30 h 5 v 15 h -5 z M 80 40 h 10 v 5 h -10 z M 85 50 h 10 v 5 h -10 z M 15 65 h 5 v 5 h -5 z M 30 70 h 10 v 5 h -10 z M 45 80 h 15 v 5 h -15 z M 65 75 h 5 v 10 h -5 z M 75 75 h 10 v 5 h -10 z" fill="#041627"/>
-    </svg>
-  `
-  
-  const blob = new Blob([svgContent], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `QR_${activeRoom.value?.name.replace(/\s+/g, '_')}_${tableCode}.svg`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+function downloadQR(tableId: number) {
+  window.open(
+    `${API_URL}/qr/download/${tableId}`,
+    '_blank'
+  )
 }
-
 // Print single ticket
-function printQR(tableCode: string) {
+function printQR(table: any) {
   const printWindow = window.open('', '_blank')
+
   if (!printWindow) return
 
   printWindow.document.write(`
     <html>
       <head>
-        <title>Print QR - ${tableCode}</title>
+        <title>Table ${table.id}</title>
         <style>
           body {
-            font-family: system-ui, sans-serif;
+            font-family: sans-serif;
             text-align: center;
             padding: 40px;
-            color: #0f172a;
           }
-          .ticket {
-            border: 2px dashed #94a3b8;
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 320px;
-            margin: 0 auto;
-            background: white;
-          }
-          .logo {
-            font-weight: 800;
-            color: #026783;
-            font-size: 18px;
-            margin-bottom: 20px;
-          }
-          .qr {
-            width: 200px;
-            height: 200px;
-            margin: 0 auto 20px;
-          }
-          .info {
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 5px;
-          }
-          .sub {
-            font-size: 11px;
-            color: #64748b;
+
+          img {
+            width: 250px;
+            height: 250px;
           }
         </style>
       </head>
+
       <body>
-        <div class="ticket">
-          <div class="logo">ProctorInsight</div>
-          <svg class="qr" viewBox="0 0 100 100">
-            <rect width="100" height="100" fill="white"/>
-            <path d="M 5 5 h 20 v 20 h -20 z M 9 9 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="12" y="12" width="6" height="6" fill="#041627"/>
-            <path d="M 75 5 h 20 v 20 h -20 z M 79 9 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="82" y="12" width="6" height="6" fill="#041627"/>
-            <path d="M 5 75 h 20 v 20 h -20 z M 9 79 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="12" y="82" width="6" height="6" fill="#041627"/>
-            <rect x="35" y="42" width="30" height="16" rx="2" fill="#026783"/>
-            <text x="50" y="52" font-family="monospace" font-size="8" fill="white" font-weight="bold" text-anchor="middle">${tableCode}</text>
-            <path d="M 30 10 h 5 v 5 h -5 z M 40 5 h 10 v 5 h -10 z M 55 15 h 5 v 10 h -5 z M 10 35 h 15 v 5 h -15 z M 35 30 h 5 v 5 h -5 z M 70 30 h 5 v 15 h -5 z M 80 40 h 10 v 5 h -10 z M 85 50 h 10 v 5 h -10 z M 15 65 h 5 v 5 h -5 z M 30 70 h 10 v 5 h -10 z M 45 80 h 15 v 5 h -15 z M 65 75 h 5 v 10 h -5 z M 75 75 h 10 v 5 h -10 z" fill="#041627"/>
-          </svg>
-          <div class="info">Table Number: ${tableCode}</div>
-          <div class="sub">${activeRoom.value?.name}</div>
-        </div>
+        <h2>ProctorInsight</h2>
+
+        <img
+          src="${API_URL}/qr/${table.id}"
+        />
+
+        <h3>Table ${table.id}</h3>
+
+        <p>${activeRoom.value?.name}</p>
+
         <script>
-          window.onload = function() {
-            window.print();
-            window.close();
+          window.onload = () => {
+            window.print()
+            window.close()
           }
         <\/script>
       </body>
     </html>
   `)
+
   printWindow.document.close()
 }
 
 // Print all tickets in batch
 function printAllQRs() {
   const printWindow = window.open('', '_blank')
-  if (!printWindow) return
 
-  let ticketsHtml = ''
-  tables.value.forEach(table => {
-    ticketsHtml += `
-      <div class="ticket">
-        <div class="logo">ProctorInsight</div>
-        <svg class="qr" viewBox="0 0 100 100">
-          <rect width="100" height="100" fill="white"/>
-          <path d="M 5 5 h 20 v 20 h -20 z M 9 9 h 12 v 12 h -12 z" fill="#041627"/>
-          <rect x="12" y="12" width="6" height="6" fill="#041627"/>
-          <path d="M 75 5 h 20 v 20 h -20 z M 79 9 h 12 v 12 h -12 z" fill="#041627"/>
-          <rect x="82" y="12" width="6" height="6" fill="#041627"/>
-          <path d="M 5 75 h 20 v 20 h -20 z M 9 79 h 12 v 12 h -12 z" fill="#041627"/>
-          <rect x="12" y="82" width="6" height="6" fill="#041627"/>
-          <rect x="35" y="42" width="30" height="16" rx="2" fill="#026783"/>
-          <text x="50" y="52" font-family="monospace" font-size="8" fill="white" font-weight="bold" text-anchor="middle">${table.code}</text>
-          <path d="M 30 10 h 5 v 5 h -5 z M 40 5 h 10 v 5 h -10 z M 55 15 h 5 v 10 h -5 z M 10 35 h 15 v 5 h -15 z M 35 30 h 5 v 5 h -5 z M 70 30 h 5 v 15 h -5 z M 80 40 h 10 v 5 h -10 z M 85 50 h 10 v 5 h -10 z M 15 65 h 5 v 5 h -5 z M 30 70 h 10 v 5 h -10 z M 45 80 h 15 v 5 h -15 z M 65 75 h 5 v 10 h -5 z M 75 75 h 10 v 5 h -10 z" fill="#041627"/>
-        </svg>
-        <div class="info">Table Number: ${table.code}</div>
-        <div class="sub">${activeRoom.value?.name}</div>
-      </div>
-    `
-  })
+  if (!printWindow || !activeRoom.value) return
+
+  const ticketsHtml = tables.value
+    .map(
+      table => `
+        <div class="ticket">
+          <div class="logo">ProctorInsight</div>
+
+          <img
+            class="qr"
+            src="${API_URL}/qr/${table.id}"
+            alt="QR Table ${table.id}"
+          />
+
+          <div class="info">
+            Table ${table.id}
+          </div>
+
+          <div class="sub">
+            ${activeRoom.value?.name}
+          </div>
+        </div>
+      `,
+    )
+    .join('')
 
   printWindow.document.write(`
     <html>
       <head>
-        <title>Batch Print QR Codes - ${activeRoom.value?.name}</title>
+        <title>
+          QR Codes - ${activeRoom.value.name}
+        </title>
+
         <style>
           body {
             font-family: system-ui, sans-serif;
             padding: 20px;
-            background: #f1f5f9;
             display: flex;
             flex-wrap: wrap;
             gap: 20px;
             justify-content: center;
           }
+
           .ticket {
+            width: 260px;
             border: 2px dashed #cbd5e1;
             border-radius: 12px;
-            padding: 25px;
-            width: 260px;
-            background: white;
+            padding: 20px;
             text-align: center;
             page-break-inside: avoid;
           }
+
           .logo {
-            font-weight: 800;
-            color: #026783;
-            font-size: 16px;
-            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
           }
+
           .qr {
-            width: 160px;
-            height: 160px;
-            margin: 0 auto 15px;
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            margin-bottom: 12px;
           }
+
           .info {
             font-weight: bold;
-            font-size: 13px;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
           }
+
           .sub {
-            font-size: 10px;
-            color: #64748b;
+            color: gray;
+            font-size: 12px;
           }
+
           @media print {
             body {
-              background: transparent;
               padding: 0;
             }
+
             .ticket {
-              border-color: #e2e8f0;
-              margin-bottom: 20px;
+              break-inside: avoid;
             }
           }
         </style>
       </head>
+
       <body>
         ${ticketsHtml}
+
         <script>
-          window.onload = function() {
+          window.onload = () => {
             window.print();
             window.close();
           }
@@ -232,6 +184,7 @@ function printAllQRs() {
       </body>
     </html>
   `)
+
   printWindow.document.close()
 }
 </script>
@@ -268,40 +221,25 @@ function printAllQRs() {
         class="bg-[var(--bg-secondary)] border border-[var(--border-color)] p-5 rounded-xl shadow-xs flex flex-col items-center"
       >
         <!-- Table indicator -->
-        <h4 class="text-sm font-bold text-[var(--text-primary)] mb-4">Table Number: {{ table.code }}</h4>
+        <h4 class="text-sm font-bold text-[var(--text-primary)] mb-4">Table Number: {{ table.id }}</h4>
 
         <!-- Vector QR Code -->
         <div class="bg-white p-4 rounded-lg border border-[var(--border-color)] shadow-inner mb-4 w-40 h-40 flex items-center justify-center">
-          <svg class="w-full h-full select-none" viewBox="0 0 100 100">
-            <rect width="100" height="100" fill="white"/>
-            
-            <!-- Finder Squares -->
-            <path d="M 5 5 h 20 v 20 h -20 z M 9 9 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="12" y="12" width="6" height="6" fill="#041627"/>
-            
-            <path d="M 75 5 h 20 v 20 h -20 z M 79 9 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="82" y="12" width="6" height="6" fill="#041627"/>
-            
-            <path d="M 5 75 h 20 v 20 h -20 z M 9 79 h 12 v 12 h -12 z" fill="#041627"/>
-            <rect x="12" y="82" width="6" height="6" fill="#041627"/>
-            
-            <!-- Center Code Badge -->
-            <rect x="35" y="42" width="30" height="16" rx="2" fill="#026783"/>
-            <text x="50" y="52" font-family="monospace" font-size="8" fill="white" font-weight="bold" text-anchor="middle">{{ table.code }}</text>
-            
-            <!-- Random bits -->
-            <path d="M 30 10 h 5 v 5 h -5 z M 40 5 h 10 v 5 h -10 z M 55 15 h 5 v 10 h -5 z M 10 35 h 15 v 5 h -15 z M 35 30 h 5 v 5 h -5 z M 70 30 h 5 v 15 h -5 z M 80 40 h 10 v 5 h -10 z M 85 50 h 10 v 5 h -10 z M 15 65 h 5 v 5 h -5 z M 30 70 h 10 v 5 h -10 z M 45 80 h 15 v 5 h -15 z M 65 75 h 5 v 10 h -5 z M 75 75 h 10 v 5 h -10 z" fill="#041627"/>
-          </svg>
+         <img
+  :src="`${API_URL}/qr/${table.id}`"
+  class="w-full h-full object-contain"
+  :alt="`QR Table ${table.id}`"
+/>
         </div>
 
         <p class="text-[10px] text-[var(--text-muted)] select-all mb-5 truncate w-full text-center">
-          proinsight://room/{{ selectedRoomId }}/table/{{ table.code }}
+          proinsight://room/{{ selectedRoomId }}/table/{{ table.id }}
         </p>
 
         <!-- Actions -->
         <div class="grid grid-cols-2 gap-2 w-full pt-3 border-t border-[var(--border-color)]">
           <button
-            @click="downloadQR(table.code)"
+            @click="downloadQR(table.id)"
             class="flex items-center justify-center gap-1 py-1.5 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] transition-colors"
           >
             <Download class="h-3 w-3" />
@@ -309,7 +247,7 @@ function printAllQRs() {
           </button>
           
           <button
-            @click="printQR(table.code)"
+            @click="printQR(table.id)"
             class="flex items-center justify-center gap-1 py-1.5 border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] transition-colors"
           >
             <Printer class="h-3 w-3" />
