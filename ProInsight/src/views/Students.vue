@@ -77,14 +77,14 @@ function openAddModal() {
   isFormModalOpen.value = true
 }
 
-function openEditModal(student: Student) {
+async function openEditModal(student: Student) {
   modalMode.value = 'edit'
   formModel.value = { ...student }
   errorMsg.value = ''
   isFormModalOpen.value = true
 }
 
-function handleSave() {
+async function handleSave() {
   if (!formModel.value.firstName || !formModel.value.lastName || !formModel.value.group) {
     errorMsg.value = 'First name, last name, and group are required.'
     return
@@ -94,10 +94,10 @@ function handleSave() {
   
   if (modalMode.value === 'add') {
     const res = studentsStore.addStudent(formModel.value)
-    if (res.success) {
+    if ((await res).success) {
       isFormModalOpen.value = false
     } else {
-      errorMsg.value = res.message || 'Error creating student profile.'
+      errorMsg.value = (await res).message || 'Error creating student profile.'
     }
   } else {
     const res = studentsStore.updateStudent(formModel.value.registrationNumber, formModel.value)
