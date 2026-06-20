@@ -1,15 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '../services/api'
+import { getSocket, connectSocket } from '../services/socket'
 
 export interface Exam {
   id: number
   name: string
-  subject: string
   classroomId: number
   classroomName: string
   professorEmail: string
-  professorId:number
+  professorId: number
   professorName: string
   date: string
   startTime: string
@@ -19,6 +19,31 @@ export interface Exam {
 
 export const useExamsStore = defineStore('exams', () => {
   const exams = ref<Exam[]>([])
+  let socketBound = false
+
+  /** Listen for exam status changes pushed by the backend so the UI updates without a refresh */
+  function bindSocketEvents() {
+    if (socketBound) return
+    socketBound = true
+    connectSocket()
+    const socket = getSocket()
+    socket.on('sessionStarted', (data: { examId: number }) => {
+      const exam = exams.value.find(e => e.id === data.examId)
+      if (exam) {
+        exam.status = 'active'
+      } else {
+        initExams()
+      }
+    })
+    socket.on('sessionEnded', (data: { examId: number }) => {
+      const exam = exams.value.find(e => e.id === data.examId)
+      if (exam) {
+        exam.status = 'completed'
+      }
+      initExams()
+    })
+  }
+
 
 
   async function initExams() {
@@ -35,8 +60,7 @@ export const useExamsStore = defineStore('exams', () => {
 
           return {
             id: e.id,
-            name: e.title,
-            subject: e.module,
+            name: e.module,
 
             classroomId: e.classroomId,
             classroomName:
@@ -54,23 +78,23 @@ export const useExamsStore = defineStore('exams', () => {
               e.professor?.email ?? e.professorEmail ?? '',
 
             date:
-              e.examDate.split('T')[0],
+              e.examDate ? e.examDate.split('T')[0] : '',
 
             startTime:
-              new Date(e.startTime)
+              e.startTime ? new Date(e.startTime)
                 .toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
                   hour12: false,
-                }),
+                }) : '',
 
             endTime:
-              new Date(e.endTime)
+              e.endTime ? new Date(e.endTime)
                 .toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
                   hour12: false,
-                }),
+                }) : '',
 
             status:
               frontendStatus,
@@ -102,8 +126,7 @@ export const useExamsStore = defineStore('exams', () => {
 
     const { data } =
       await api.post('/exams', {
-        title: exam.name,
-        module: exam.subject,
+        module: exam.name,
         examDate: new Date(
           exam.date
         ).toISOString(),
@@ -127,12 +150,8 @@ export const useExamsStore = defineStore('exams', () => {
     const payload: any = {}
 
     if (updatedData.name)
-      payload.title =
-        updatedData.name
-
-    if (updatedData.subject)
       payload.module =
-        updatedData.subject
+        updatedData.name
 
     if (updatedData.classroomId)
       payload.classroomId =
@@ -141,6 +160,12 @@ export const useExamsStore = defineStore('exams', () => {
     if (updatedData.professorId)
       payload.professorId =
         updatedData.professorId
+
+    if (updatedData.date && updatedData.startTime && updatedData.endTime) {
+      payload.examDate = new Date(updatedData.date).toISOString()
+      payload.startTime = new Date(`${updatedData.date}T${updatedData.startTime}`).toISOString()
+      payload.endTime = new Date(`${updatedData.date}T${updatedData.endTime}`).toISOString()
+    }
 
     await api.patch(
       `/exams/${id}`,
@@ -168,6 +193,7 @@ export const useExamsStore = defineStore('exams', () => {
     initExams,
     addExam,
     updateExam,
-    deleteExam
+    deleteExam,
+    bindSocketEvents
   }
 })

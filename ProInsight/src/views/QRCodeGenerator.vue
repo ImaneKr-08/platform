@@ -58,7 +58,7 @@ function printQR(table: any) {
       </head>
 
       <body>
-        <h2>ProctorInsight</h2>
+        <h2>ProInsight</h2>
 
         <img
           src="${API_URL}/qr/${table.id}"
@@ -91,7 +91,7 @@ function printAllQRs() {
     .map(
       table => `
         <div class="ticket">
-          <div class="logo">ProctorInsight</div>
+          <div class="logo">ProInsight</div>
 
           <img
             class="qr"

@@ -16,7 +16,6 @@ const errorMsg = ref('')
 const formModel = ref<Professor>({
   name: '',
   email: '',
-  department: 'Computer Science',
   id: 0,
   password: ''
 })
@@ -34,9 +33,7 @@ const filteredProfessors = computed(() => {
       prof.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       prof.email.toLowerCase().includes(searchQuery.value.toLowerCase())
     
-    const matchesDept = !selectedDepartment.value || prof.department === selectedDepartment.value
-
-    return matchesSearch && matchesDept
+    return matchesSearch
   })
 })
 
@@ -60,7 +57,6 @@ function openAddModal() {
   formModel.value = {
     name: '',
     email: '',
-    department: 'Computer Science',
     id: 0
   }
   generatePassword()
@@ -148,13 +144,6 @@ async function handleDelete(id: number) {
       </div>
 
       <div class="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end">
-        <select
-          v-model="selectedDepartment"
-          class="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[#026783]"
-        >
-          <option value="">All Departments</option>
-          <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-        </select>
       </div>
     </div>
 
@@ -166,7 +155,7 @@ async function handleDelete(id: number) {
             <tr class="bg-[var(--bg-primary)] text-[var(--text-secondary)] border-b border-[var(--border-color)]">
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Professor Name</th>
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Email Address</th>
-              <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Department</th>
+
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>
             </tr>
           </thead>
@@ -178,9 +167,7 @@ async function handleDelete(id: number) {
               <td class="px-6 py-4 text-slate-500 font-mono text-xs">
                 {{ prof.email }}
               </td>
-              <td class="px-6 py-4 text-[var(--text-secondary)]">
-                {{ prof.department }}
-              </td>
+
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
                   <button
@@ -228,7 +215,7 @@ async function handleDelete(id: number) {
           <input
             v-model="formModel.name"
             type="text"
-            placeholder="Dr. John Watson"
+            placeholder="pr. name "
             class="input-field"
           />
         </div>
@@ -270,15 +257,7 @@ async function handleDelete(id: number) {
   </p>
 </div> 
 
-        <div>
-          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Department</label>
-          <select
-            v-model="formModel.department"
-            class="input-field"
-          >
-            <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-          </select>
-        </div>
+
       </div>
 
       <template #footer>

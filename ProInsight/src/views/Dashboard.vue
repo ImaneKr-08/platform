@@ -34,6 +34,7 @@ onMounted(() => {
   professorsStore.initProfessors()
   classroomsStore.initClassrooms()
   examsStore.initExams()
+  examsStore.bindSocketEvents()
 })
 
 const isAdmin = computed(() => authStore.isAdmin)
@@ -117,7 +118,7 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
       <div class="p-6 bg-gradient-to-r from-[#041627] to-[#0d2a45] rounded-2xl text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 border border-slate-800">
         <div>
           <h2 class="text-xl sm:text-2xl font-bold tracking-tight mb-2">Hello, {{ user?.name }}</h2>
-          <p class="text-sm text-slate-300">Welcome to ProctorInsight. Below are your assigned exams and stress levels monitoring overview.</p>
+          <p class="text-sm text-slate-300">Welcome to ProInsight. Below are your assigned exams and stress levels monitoring overview.</p>
         </div>
         <div class="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-xs text-emerald-400 font-semibold w-fit">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -169,7 +170,6 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
             </div>
             
             <h4 class="text-sm font-bold text-[var(--text-primary)] truncate">{{ exam.name }}</h4>
-            <p class="text-xs text-[var(--text-secondary)] mt-1 truncate">{{ exam.subject }}</p>
 
             <div class="mt-4 pt-4 border-t border-[var(--border-color)] space-y-2">
               <p class="text-[11px] text-[var(--text-secondary)] flex items-center gap-2">

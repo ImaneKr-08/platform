@@ -21,9 +21,10 @@ const formModel = ref<Student>({
   firstName: '',
   lastName: '',
   registrationNumber: '',
-  department: 'Computer Science',
   group: '',
-  espId: ''
+  espId: '',
+  email: '',
+  password: ''
 })
 
 onMounted(() => {
@@ -40,13 +41,20 @@ const filteredStudents = computed(() => {
       student.firstName.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       student.lastName.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       student.registrationNumber.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      student.espId.toLowerCase().includes(searchQuery.value.toLowerCase())
+      (student.espId?.toLowerCase() || '').includes(searchQuery.value.toLowerCase())
 
-    const matchesDept = !selectedDepartment.value || student.department === selectedDepartment.value
-
-    return matchesSearch && matchesDept
+    return matchesSearch
   })
 })
+
+function generatePassword(length = 10) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  formModel.value.password = password
+}
 
 // Pagination logic
 const totalPages = computed(() => Math.ceil(filteredStudents.value.length / itemsPerPage))
@@ -68,11 +76,12 @@ function openAddModal() {
   formModel.value = {
     firstName: '',
     lastName: '',
-    registrationNumber: `REG-2026-0${studentsStore.students.length + 11}`,
-    department: 'Computer Science',
+    email: '',
+    registrationNumber: ``,
     group: '',
-    espId: `ESP32-DEV${studentsStore.students.length + 11}`
+    espId: ''
   }
+  generatePassword()
   errorMsg.value = ''
   isFormModalOpen.value = true
 }
@@ -151,14 +160,6 @@ function handleDelete(regNumber: string) {
 
       <!-- Filters -->
       <div class="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end">
-        <Filter class="h-4.5 w-4.5 text-[var(--text-secondary)]" />
-        <select
-          v-model="selectedDepartment"
-          class="bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[#026783]"
-        >
-          <option value="">All Departments</option>
-          <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-        </select>
       </div>
     </div>
 
@@ -170,9 +171,9 @@ function handleDelete(regNumber: string) {
             <tr class="bg-[var(--bg-primary)] text-[var(--text-secondary)] border-b border-[var(--border-color)]">
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Student Name</th>
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Reg. Number</th>
-              <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Department</th>
+
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Group</th>
-              <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">ESP32 ID</th>
+              <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider">Bracelet ID</th>
               <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>
             </tr>
           </thead>
@@ -184,15 +185,16 @@ function handleDelete(regNumber: string) {
               <td class="px-6 py-4 text-slate-500 font-mono text-xs">
                 {{ student.registrationNumber }}
               </td>
-              <td class="px-6 py-4 text-[var(--text-secondary)]">
-                {{ student.department }}
-              </td>
+
               <td class="px-6 py-4 text-[var(--text-secondary)]">
                 {{ student.group }}
               </td>
               <td class="px-6 py-4">
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 font-mono text-[10px]">
+                <span v-if="student.espId" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 font-mono text-[10px]">
                   {{ student.espId }}
+                </span>
+                <span v-else class="text-[var(--text-muted)] text-xs italic">
+                  Not Assigned
                 </span>
               </td>
               <td class="px-6 py-4 text-right">
@@ -264,7 +266,7 @@ function handleDelete(regNumber: string) {
           <input
             v-model="formModel.firstName"
             type="text"
-            placeholder="John"
+            placeholder="first name"
             class="input-field"
           />
         </div>
@@ -274,19 +276,31 @@ function handleDelete(regNumber: string) {
           <input
             v-model="formModel.lastName"
             type="text"
-            placeholder="Doe"
+            placeholder="last name"
             class="input-field"
           />
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Registration Number</label>
+          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Email Address</label>
+          <input
+            v-model="formModel.email"
+            type="email"
+            placeholder="student@example.com"
+            class="input-field"
+            :disabled="modalMode === 'edit'"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Student ID</label>
           <input
             v-model="formModel.registrationNumber"
             type="text"
             class="input-field bg-[var(--bg-tertiary)] cursor-not-allowed"
             :disabled="modalMode === 'edit'"
-            title="Registration numbers cannot be modified once set"
+            title="Student IDs cannot be modified once set"
+            placeholder="XXXXXXXX"
           />
         </div>
 
@@ -299,19 +313,8 @@ function handleDelete(regNumber: string) {
             class="input-field"
           />
         </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Department</label>
-          <select
-            v-model="formModel.department"
-            class="input-field"
-          >
-            <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">ESP32 Device ID</label>
+<div>
+  <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Bracelet ID</label>
           <input
             v-model="formModel.espId"
             type="text"
@@ -319,6 +322,32 @@ function handleDelete(regNumber: string) {
             class="input-field"
           />
         </div>
+</div>
+        
+
+        <div>
+
+<div v-if="modalMode === 'add'">
+          <label class="block text-xs font-semibold mb-1">Temporary Password</label>
+          <div class="flex gap-2">
+            <input
+              v-model="formModel.password"
+              type="text"
+              class="input-field flex-1"
+            />
+            <button
+              type="button"
+              @click="generatePassword()"
+              class="px-3 py-2 bg-[#026783] text-white rounded-lg"
+            >
+              Generate
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">
+            Give this password to the student.
+          </p>
+        </div>
+
       </div>
 
       <template #footer>

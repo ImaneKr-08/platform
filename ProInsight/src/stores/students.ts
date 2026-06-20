@@ -6,25 +6,26 @@ export interface Student {
   firstName: string
   lastName: string
   registrationNumber: string
-  department: string
   group: string
-  espId: string
+  espId?: string | null
+  email?: string
+  password?: string
 }
 
 export const useStudentsStore = defineStore('students', () => {
   const students = ref<Student[]>([])
 
   const defaultStudents: Student[] = [
-    { firstName: 'Marcus', lastName: 'Chen', registrationNumber: 'REG-2026-001', department: 'Computer Science', group: 'CS-A', espId: 'ESP32-CS01' },
-    { firstName: 'Elena', lastName: 'Vance', registrationNumber: 'REG-2026-002', department: 'Bio-Engineering', group: 'BIO-2B', espId: 'ESP32-BIO02' },
-    { firstName: 'Julianna', lastName: 'Moore', registrationNumber: 'REG-2026-003', department: 'Computer Science', group: 'CS-A', espId: 'ESP32-CS03' },
-    { firstName: 'Sarah', lastName: 'Park', registrationNumber: 'REG-2026-004', department: 'Bio-Engineering', group: 'BIO-2B', espId: 'ESP32-BIO04' },
-    { firstName: 'Omar', lastName: 'Khalil', registrationNumber: 'REG-2026-005', department: 'Computer Science', group: 'CS-B', espId: 'ESP32-CS05' },
-    { firstName: 'Li', lastName: 'Wei', registrationNumber: 'REG-2026-006', department: 'Mathematics', group: 'MATH-1A', espId: 'ESP32-MATH06' },
-    { firstName: 'Sarah', lastName: 'Miller', registrationNumber: 'REG-2026-007', department: 'Computer Science', group: 'CS-B', espId: 'ESP32-CS07' },
-    { firstName: 'Arthur', lastName: 'Dent', registrationNumber: 'REG-2026-008', department: 'Astrophysics', group: 'AST-4C', espId: 'ESP32-AST08' },
-    { firstName: 'Tricia', lastName: 'McMillan', registrationNumber: 'REG-2026-009', department: 'Astrophysics', group: 'AST-4C', espId: 'ESP32-AST09' },
-    { firstName: 'Ford', lastName: 'Prefect', registrationNumber: 'REG-2026-010', department: 'Sociology', group: 'SOC-3A', espId: 'ESP32-SOC10' }
+    { firstName: 'Marcus', lastName: 'Chen', registrationNumber: 'REG-2026-001', group: 'CS-A', espId: 'ESP32-CS01' },
+    { firstName: 'Elena', lastName: 'Vance', registrationNumber: 'REG-2026-002', group: 'BIO-2B', espId: 'ESP32-BIO02' },
+    { firstName: 'Julianna', lastName: 'Moore', registrationNumber: 'REG-2026-003', group: 'CS-A', espId: 'ESP32-CS03' },
+    { firstName: 'Sarah', lastName: 'Park', registrationNumber: 'REG-2026-004', group: 'BIO-2B', espId: 'ESP32-BIO04' },
+    { firstName: 'Omar', lastName: 'Khalil', registrationNumber: 'REG-2026-005', group: 'CS-B', espId: 'ESP32-CS05' },
+    { firstName: 'Li', lastName: 'Wei', registrationNumber: 'REG-2026-006', group: 'MATH-1A', espId: 'ESP32-MATH06' },
+    { firstName: 'Sarah', lastName: 'Miller', registrationNumber: 'REG-2026-007', group: 'CS-B', espId: 'ESP32-CS07' },
+    { firstName: 'Arthur', lastName: 'Dent', registrationNumber: 'REG-2026-008', group: 'AST-4C', espId: 'ESP32-AST08' },
+    { firstName: 'Tricia', lastName: 'McMillan', registrationNumber: 'REG-2026-009', group: 'AST-4C', espId: 'ESP32-AST09' },
+    { firstName: 'Ford', lastName: 'Prefect', registrationNumber: 'REG-2026-010', group: 'SOC-3A', espId: 'ESP32-SOC10' }
   ]
 
   async function initStudents() {
@@ -32,11 +33,10 @@ export const useStudentsStore = defineStore('students', () => {
       const response = await api.get('/students', { params: { limit: 100 } })
       if (response.data && Array.isArray(response.data.items)) {
         students.value = response.data.items.map((s: any) => ({
-          firstName: s.firstName,
-          lastName: s.lastName,
+          firstName: s.user?.firstName || '',
+          lastName: s.user?.lastName || '',
           registrationNumber: s.studentCode,
-          department: s.department,
-          group: 'A',
+          group: s.group || 'A',
           espId: s.braceletId || ''
         }))
         saveToStorage()
@@ -61,7 +61,7 @@ export const useStudentsStore = defineStore('students', () => {
 
   async function addStudent(student: Student) {
     const existsReg = students.value.some(s => s.registrationNumber === student.registrationNumber)
-    const existsEsp = students.value.some(s => s.espId === student.espId)
+    const existsEsp = student.espId ? students.value.some(s => s.espId === student.espId) : false
     if (existsReg || existsEsp) {
       return { success: false, message: existsReg ? 'Registration number already exists.' : 'ESP32 ID already assigned.' }
     }
@@ -70,10 +70,11 @@ export const useStudentsStore = defineStore('students', () => {
       await api.post('/students', {
         firstName: student.firstName,
         lastName: student.lastName,
-        email: `${student.firstName.toLowerCase()}.${student.lastName.toLowerCase()}@proinsight.edu`,
-        department: student.department,
+        email: student.email || `${student.firstName.toLowerCase()}.${student.lastName.toLowerCase()}@proinsight.edu`,
+        group: student.group,
         studentCode: student.registrationNumber,
-        braceletId: student.espId || null
+        braceletId: student.espId || null,
+        password: student.password
       })
     } catch (err: any) {
       console.warn('Failed to save student on backend:', err)

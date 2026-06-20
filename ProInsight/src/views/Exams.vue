@@ -8,6 +8,7 @@ import { useMonitoringStore } from '../stores/monitoring'
 import Modal from '../components/Modal.vue'
 import { Plus, Edit2, Trash2, Play, AlertCircle, Clock, MapPin, UserCheck, CheckCircle, Activity } from 'lucide-vue-next'
 import {api} from '../services/api'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const examsStore = useExamsStore()
@@ -19,10 +20,9 @@ const monitoringStore = useMonitoringStore()
 const isFormModalOpen = ref(false)
 const modalMode = ref<'add' | 'edit'>('add')
 const errorMsg = ref('')
-
+const authStore=useAuthStore()
 const formModel = ref<Omit<Exam, 'id' | 'status'>>({
   name: '',
-  subject: '',
   classroomId: 0,
   classroomName: '',
   professorEmail: '',
@@ -37,8 +37,9 @@ const editingExamId = ref<number | null>(null)
 
 onMounted(() => {
   examsStore.initExams()
+  examsStore.bindSocketEvents()
   classroomsStore.initClassrooms()
-  professorsStore.initProfessors()
+  if(authStore.isAdmin){professorsStore.initProfessors()}
 })
 
 function openAddModal() {
@@ -48,7 +49,6 @@ function openAddModal() {
   // Set defaults
   formModel.value = {
     name: '',
-    subject: '',
     classroomId: classroomsStore.classrooms[0]?.id || 0,
     classroomName: classroomsStore.classrooms[0]?.name || '',
     professorEmail: professorsStore.professors[0]?.email || '',
@@ -69,7 +69,6 @@ function openEditModal(exam: Exam) {
   
   formModel.value = {
     name: exam.name,
-    subject: exam.subject,
     classroomId: exam.classroomId,
     classroomName: exam.classroomName,
     professorEmail: exam.professorEmail,
@@ -84,8 +83,8 @@ function openEditModal(exam: Exam) {
 }
 
 async function handleSave() {
-  if (!formModel.value.name || !formModel.value.subject || !formModel.value.date) {
-    errorMsg.value = 'Name, subject, and date are required.'
+  if (!formModel.value.name || !formModel.value.date) {
+    errorMsg.value = 'Exam name/module and date are required.'
     return
   }
 
@@ -213,7 +212,6 @@ async function stopExamSession() {
           </div>
 
           <h4 class="text-sm font-bold text-[var(--text-primary)] truncate">{{ exam.name }}</h4>
-          <p class="text-xs text-[var(--text-secondary)] mt-1.5 truncate">{{ exam.subject }}</p>
 
           <!-- Specifications list -->
           <div class="mt-4 pt-4 border-t border-[var(--border-color)] space-y-2.5">
@@ -283,22 +281,13 @@ async function stopExamSession() {
       </div>
 
       <div class="space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Exam Header Code</label>
+            <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Module / Exam Name</label>
             <input
               v-model="formModel.name"
               type="text"
               placeholder="e.g. Midterm Exam - CS101"
-              class="input-field"
-            />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Subject Matter</label>
-            <input
-              v-model="formModel.subject"
-              type="text"
-              placeholder="e.g. Intro to Programming"
               class="input-field"
             />
           </div>
@@ -316,7 +305,7 @@ async function stopExamSession() {
           </div>
           
           <div>
-            <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Assign Proctor Professor</label>
+            <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Assign Professor</label>
             <select
               v-model="formModel.professorId"
               class="input-field"

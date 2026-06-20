@@ -3,11 +3,28 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+import { useAuthStore } from './stores/auth'
+import { setSessionExpiredHandler } from './services/api'
 
-const app = createApp(App)
-const pinia = createPinia()
+async function bootstrap() {
+  const app = createApp(App)
+  const pinia = createPinia()
 
-app.use(pinia)
-app.use(router)
+  app.use(pinia)
+  app.use(router)
 
-app.mount('#app')
+  const authStore = useAuthStore()
+
+  setSessionExpiredHandler(() => {
+    authStore.clearSession()
+    if (router.currentRoute.value.name !== 'Login') {
+      router.replace({ name: 'Login' })
+    }
+  })
+
+  await authStore.initAuth()
+  await router.isReady()
+  app.mount('#app')
+}
+
+bootstrap()

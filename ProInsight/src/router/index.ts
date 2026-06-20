@@ -77,27 +77,32 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
-  
-  // Make sure auth is initialized (load from localStorage)
-  if (!authStore.isAuthenticated) {
-    authStore.initAuth()
+
+  if (!authStore.authReady) {
+    await authStore.initAuth()
   }
 
   const isAuth = authStore.isAuthenticated
   const isAdmin = authStore.isAdmin
 
   if (to.meta.requiresAuth && !isAuth) {
-    next({ name: 'Login' })
-  } else if (to.meta.guestOnly && isAuth) {
-    next({ name: 'Dashboard' })
-  } else if (to.meta.requiresAdmin && !isAdmin) {
-    // If professor tries to access admin-only page, redirect to dashboard
-    next({ name: 'Dashboard' })
-  } else {
-    next()
+    // Not logged in → go to login, replace history so back button doesn't loop
+    return next({ name: 'Login', replace: true })
   }
+
+  if (to.meta.guestOnly && isAuth) {
+    // Already logged in → skip login page
+    return next({ name: 'Dashboard', replace: true })
+  }
+
+  if (to.meta.requiresAdmin && !isAdmin) {
+    // Professor tried admin page → back to dashboard
+    return next({ name: 'Dashboard', replace: true })
+  }
+
+  next()
 })
 
 export default router

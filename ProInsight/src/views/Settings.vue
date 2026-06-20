@@ -152,7 +152,7 @@ function handleThemeChange(targetTheme: 'light' | 'dark') {
 
       <div class="p-6 text-xs text-[var(--text-secondary)] space-y-3.5">
         <p class="leading-relaxed">
-          The ProctorInsight platform operates on a simulated WebSocket event bus mapping. 
+          The ProInsight platform operates on a simulated WebSocket event bus mapping. 
           Desks can host telemetry jitter loops simulating active ESP32 device transmissions.
         </p>
 

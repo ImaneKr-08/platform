@@ -6,7 +6,6 @@ export interface Professor {
   id: number
   name: string
   email: string
-  department: string
   password?: string
 }
 
@@ -20,9 +19,8 @@ export const useProfessorsStore = defineStore('professors', () => {
       if (response.data && Array.isArray(response.data)) {
         professors.value = response.data.map((p: any) => ({
           id: p.id,
-          name: `${p.firstName} ${p.lastName}`,
-          email: p.email,
-          department: p.department
+          name: `${p.user?.firstName} ${p.user?.lastName}`,
+          email: p.user?.email,
         }))
 
         return
@@ -48,7 +46,6 @@ export const useProfessorsStore = defineStore('professors', () => {
         firstName,
         lastName,
         email: prof.email,
-        department: prof.department,
         password: prof.password
       })
 
@@ -72,7 +69,6 @@ export const useProfessorsStore = defineStore('professors', () => {
         firstName: nameParts[0],
         lastName: nameParts.slice(1).join(' '),
         email: updatedData.email,
-        department: updatedData.department
       })
 
       await initProfessors()

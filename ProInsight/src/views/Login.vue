@@ -63,7 +63,7 @@ function quickFill(role: 'admin' | 'professor') {
       <!-- Logo Branding -->
       <div class="flex items-center gap-3 mb-6 select-none animate-fade-in">
         <Activity class="h-8 w-8 text-emerald-400" />
-        <span class="text-2xl font-extrabold tracking-tight text-white">ProctorInsight</span>
+        <span class="text-2xl font-extrabold tracking-tight text-white">ProInsight</span>
       </div>
 
       <!-- Login Glass Card -->
@@ -134,34 +134,13 @@ function quickFill(role: 'admin' | 'professor') {
           >
             <span v-if="isLoading" class="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             <span v-else class="flex items-center gap-1.5">
-              Access Platform
-              <ArrowRight class="h-4 w-4" />
+login              
             </span>
           </button>
         </form>
       </div>
 
-      <!-- Quick Test Panel -->
-      <div class="w-full mt-6 bg-[#081320] border border-slate-900 rounded-xl p-5 shadow-lg select-none">
-        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-center mb-3">Quick Credentials Switcher</h4>
-        <div class="grid grid-cols-2 gap-3">
-          <button
-            @click="quickFill('admin')"
-            class="flex flex-col items-center p-2.5 rounded-lg border border-slate-800 bg-[#0d1e30]/30 hover:bg-[#0d1e30]/80 transition-colors text-left"
-          >
-            <span class="text-xs font-bold text-white leading-tight">Admin Role</span>
-            <span class="text-[9px] text-indigo-400 mt-0.5">Click to auto-fill</span>
-          </button>
-          
-          <button
-            @click="quickFill('professor')"
-            class="flex flex-col items-center p-2.5 rounded-lg border border-slate-800 bg-[#0d1e30]/30 hover:bg-[#0d1e30]/80 transition-colors text-left"
-          >
-            <span class="text-xs font-bold text-white leading-tight">Professor Role</span>
-            <span class="text-[9px] text-amber-400 mt-0.5">Click to auto-fill</span>
-          </button>
-        </div>
-      </div>
+      
     </div>
   </div>
 </template>

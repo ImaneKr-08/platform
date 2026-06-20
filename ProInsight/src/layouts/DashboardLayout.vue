@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useMonitoringStore } from '../stores/monitoring'
+import { useLiveData } from '../composables/useLiveData'
 import {
   LayoutDashboard,
   Users,
@@ -25,6 +26,8 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const monitoringStore = useMonitoringStore()
+
+useLiveData()
 
 const isMobileOpen = ref(false)
 
@@ -66,9 +69,9 @@ const menuItems = computed(() => {
   return common
 })
 
-function handleLogout() {
-  authStore.logout()
-  router.push('/login')
+async function handleLogout() {
+  await authStore.logout()
+  await router.replace({ name: 'Login' })
 }
 
 function toggleMobileSidebar() {
@@ -94,12 +97,12 @@ const pageTitle = computed(() => {
   <div class="min-h-screen flex text-[var(--text-primary)] bg-[var(--bg-primary)] transition-colors duration-200">
     
     <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex
+    <aside class="hidden lg:flex h-screen top-0
      sticky flex-col w-64 shrink-0 bg-[var(--bg-secondary)] border-r border-[var(--border-color)]">
       <div class="h-16 flex items-center px-6 border-b border-[var(--border-color)] select-none">
         <span class="text-xl font-bold tracking-tight text-[#026783] dark:text-[#0588ad] flex items-center gap-2">
           <Activity class="h-6 w-6 text-emerald-500 animate-pulse" />
-          ProctorInsight
+          ProInsight
         </span>
       </div>
       
@@ -155,7 +158,7 @@ const pageTitle = computed(() => {
         <div class="h-16 flex items-center justify-between px-6 border-b border-[var(--border-color)]">
           <span class="text-lg font-bold tracking-tight text-[#026783] dark:text-[#0588ad] flex items-center gap-2">
             <Activity class="h-5 w-5 text-emerald-500 animate-pulse" />
-            ProctorInsight
+            ProInsight
           </span>
           <button @click="toggleMobileSidebar" class="p-1 rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]">
             <X class="h-5 w-5" />

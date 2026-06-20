@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useStudentsStore, type Student } from './students'
+import { useStudentsStore } from './students'
 import { useClassroomsStore } from './classrooms'
 import { useExamsStore } from './exams'
 import { api } from '../services/api'
+import { connectSocket, disconnectSocket, getSocket } from '../services/socket'
 
 export interface MonitorStudent {
   firstName: string
@@ -42,7 +43,6 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   const activityLogs = ref<ActivityLog[]>([])
   const isSilencedAll = ref(false)
 
-  let simulationInterval: number | null = null
   let timerInterval: number | null = null
 
   const activeExam = computed(() => {
@@ -66,8 +66,6 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     const sum = active.reduce((acc, d) => acc + (d.student?.stressPercent || 0), 0)
     return Math.round(sum / active.length)
   })
-
-  // Get seats in the seat pool
 
   // Get grid slots
   const gridSlots = computed(() => {
@@ -108,259 +106,235 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     }
   }
 
-  async function startMonitoring(
-    examId: number,
-  ) {
-    if (simulationInterval) {
-      clearInterval(simulationInterval)
-    }
+  // ─── Socket event handlers ──────────────────────────────────────────────────
 
-    if (timerInterval) {
-      clearInterval(timerInterval)
+  function bindSocketEvents() {
+    const socket = getSocket()
+
+    // Real-time telemetry from a bracelet
+    socket.on('telemetryUpdated', (data: {
+      braceletId: string
+      studentId: number
+      heartRate: number
+      stressScore: number
+      stressLevel: string
+    }) => {
+      console.log('TELEMETRY RECEIVED', data)
+      // Map backend display level to enum
+      const lvlMap: Record<string, 'BASELINE' | 'MILD_STRESS' | 'HIGH_STRESS'> = {
+        'Baseline': 'BASELINE',
+        'Mild Stress': 'MILD_STRESS',
+        'High Stress': 'HIGH_STRESS',
+      }
+      const stressLevel = lvlMap[data.stressLevel] ?? 'BASELINE'
+      const stressPercent = Math.round(data.stressScore * 100)
+
+      // Find desk by studentId and update its data
+      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      if (desk && desk.student) {
+        desk.student.heartRate = data.heartRate
+        desk.student.stressPercent = stressPercent
+        const prevLevel = desk.student.stressLevel
+        desk.student.stressLevel = stressLevel
+        desk.student.connected = true
+
+        if (stressLevel === 'HIGH_STRESS' && prevLevel !== 'HIGH_STRESS' && !desk.student.isSilenced && !isSilencedAll.value) {
+          addLog(`CRITICAL: High stress alert for ${desk.student.firstName} ${desk.student.lastName} (${stressPercent}%)`, 'error')
+        } else if (stressLevel === 'MILD_STRESS' && prevLevel === 'BASELINE') {
+          addLog(`Warning: Elevated stress for ${desk.student.firstName} ${desk.student.lastName} (${stressPercent}%)`, 'warning')
+        }
+
+      }
+    })
+
+    socket.on('studentConnected', (data: { studentId: number; braceletId: string }) => {
+      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      if (desk && desk.student) {
+        desk.student.connected = true
+        desk.student.espId = data.braceletId
+        addLog(`${desk.student.firstName} ${desk.student.lastName} bracelet connected.`, 'success')
+      }
+    })
+
+    socket.on('studentDisconnected', (data: { studentId: number }) => {
+      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      if (desk && desk.student) {
+        desk.student.connected = false
+        addLog(`Connection Lost: ${desk.student.firstName} ${desk.student.lastName}'s bracelet offline.`, 'warning')
+      }
+    })
+
+    socket.on('sessionStarted', (data: { sessionId: number; examId: number; module: string }) => {
+      addLog(`Session started for exam: ${data.module}`, 'info')
+    })
+
+    socket.on('sessionEnded', (data: { sessionId: number; examId: number }) => {
+      addLog(`Session ended.`, 'info')
+      if (activeExamId.value === data.examId) {
+        stopMonitoring()
+      }
+    })
+  }
+
+  function unbindSocketEvents() {
+    const socket = getSocket()
+    socket.off('telemetryUpdated')
+    socket.off('studentConnected')
+    socket.off('studentDisconnected')
+    socket.off('sessionStarted')
+    socket.off('sessionEnded')
+  }
+
+  // ─── Periodic poll for fresh student data ─────────────────────────────────
+
+  let pollInterval: number | null = null
+
+  function startPolling() {
+    stopPolling()
+    pollInterval = window.setInterval(async () => {
+      if (!isSessionActive.value || !activeExamId.value) return
+      try {
+        // Fetch the live exam detail to get fresh student states
+        const { data: examDetail } = await api.get(`/exams/${activeExamId.value}`)
+        if (!examDetail?.examStudents) return
+        examDetail.examStudents.forEach((es: any) => {
+          const { student, table } = es
+          if (!student) return
+          const deskId = String(table?.id ?? '')
+          const desk = desks.value.find(d => d.id === deskId)
+          if (desk) {
+            if (!desk.student) {
+              desk.student = {
+                firstName: student.firstName,
+                lastName: student.lastName,
+                registrationNumber: student.studentCode,
+                espId: student.braceletId ?? String(student.id),
+                heartRate: student.heartRate ?? 0,
+                stressPercent: student.stressScore ? Math.round(student.stressScore * 100) : 0,
+                stressLevel: (student.stressLevel as any) ?? 'BASELINE',
+                connected: student.connected ?? false,
+                isSilenced: false,
+              }
+            } else {
+              // Only update vitals from backend (socket may have newer data, but poll fills gaps)
+              if (!desk.student.connected) {
+                desk.student.connected = student.connected ?? false
+              }
+              desk.student.heartRate = student.heartRate ?? desk.student.heartRate
+              desk.student.stressPercent = student.stressScore ? Math.round(student.stressScore * 100) : desk.student.stressPercent
+              desk.student.stressLevel = (student.stressLevel as any) ?? desk.student.stressLevel
+            }
+          }
+        })
+      } catch (_) {
+        // silent — socket events are primary source
+      }
+    }, 5000) // poll every 5 s
+  }
+
+  function stopPolling() {
+    if (pollInterval !== null) {
+      clearInterval(pollInterval)
+      pollInterval = null
     }
+  }
+
+  // ─── Start / Stop monitoring ──────────────────────────────────────────────
+
+  async function startMonitoring(examId: number) {
+    if (timerInterval) clearInterval(timerInterval)
+    stopPolling()
+    unbindSocketEvents()
 
     activeExamId.value = examId
     isSessionActive.value = true
-
-    timeRemainingSeconds.value =
-      5400 + Math.floor(Math.random() * 1800)
-
+    timeRemainingSeconds.value = 5400 + Math.floor(Math.random() * 1800)
     activityLogs.value = []
 
     await studentsStore.initStudents()
     await classroomsStore.initClassrooms()
 
-    const exam =
-      examsStore.exams.find(
-        e => e.id === examId,
-      )
-
+    const exam = examsStore.exams.find(e => e.id === examId)
     if (!exam) return
 
-    const room =
-      classroomsStore.classrooms.find(
-        c => c.id === exam.classroomId,
-      )
-
+    const room = classroomsStore.classrooms.find(c => c.id === exam.classroomId)
     if (!room) {
-      addLog(
-        `Classroom not found for exam ${exam.name}`,
-        'error',
-      )
-
+      addLog(`Classroom not found for exam ${exam.name}`, 'error')
       isSessionActive.value = false
       activeExamId.value = null
-
       return
     }
 
-    addLog(
-      `Exam session "${exam.name}" started in ${room.name}.`,
-      'info',
-    )
+    addLog(`Exam session "${exam.name}" started in ${room.name}.`, 'info')
 
-    desks.value = room.tables.map(
-      t => ({
-        id: String(t.id),
-        code:
-          t.qrCode ||
-          `DESK-${t.id}`,
-        student: null,
-      }),
-    )
+    // Build desks from classroom tables
+    desks.value = room.tables.map(t => ({
+      id: String(t.id),
+      code: t.qrCode || `DESK-${t.id}`,
+      student: null,
+    }))
 
-    const availableStudents = [
-      ...studentsStore.students,
-    ]
-
-    const initialCheckInCount =
-      Math.min(
-        3,
-        desks.value.length,
-      )
-
-    for (
-      let i = 0;
-      i < initialCheckInCount;
-      i++
-    ) {
-      if (
-        availableStudents.length > 0
-      ) {
-        const student =
-          availableStudents.splice(
-            Math.floor(
-              Math.random() *
-              availableStudents.length,
-            ),
-            1,
-          )[0]
-
-        const emptyDesk =
-          desks.value.find(
-            d => !d.student,
-          )
-
-        if (emptyDesk) {
-          emptyDesk.student =
-            createMonitorStudent(
-              student,
-            )
-
-          addLog(
-            `${student.firstName} ${student.lastName} scanned ${emptyDesk.code} - Device Connected.`,
-            'success',
-          )
-        }
+    // Pre-populate desk students from assigned exam students
+    try {
+      const { data: examDetail } = await api.get(`/exams/${examId}`)
+      if (examDetail?.examStudents) {
+        examDetail.examStudents.forEach((es: any) => {
+          const { student, table } = es
+          if (!student || !table) return
+          const desk = desks.value.find(d => d.id === String(table.id))
+          if (desk) {
+            desk.student = {
+              firstName: student.firstName,
+              lastName: student.lastName,
+              registrationNumber: student.studentCode,
+              espId: student.braceletId ?? String(student.id),
+              heartRate: student.heartRate ?? 0,
+              stressPercent: student.stressScore ? Math.round(student.stressScore * 100) : 0,
+              stressLevel: (student.stressLevel as any) ?? 'BASELINE',
+              connected: student.connected ?? false,
+              isSilenced: false,
+            }
+          }
+        })
       }
+    } catch (_) {
+      addLog('Could not pre-load student seating from backend.', 'warning')
     }
 
-    runSimulator(
-      availableStudents,
-    )
+    // Connect socket and start listening
+    connectSocket()
+    bindSocketEvents()
 
-    timerInterval =
-      window.setInterval(() => {
-        if (
-          timeRemainingSeconds.value >
-          0
-        ) {
-          timeRemainingSeconds.value--
-        } else {
-          stopMonitoring()
-        }
-      }, 1000)
-  }
+    // Poll every 5 s to sync any state the socket may miss
+    startPolling()
 
-  function createMonitorStudent(s: Student): MonitorStudent {
-    return {
-      firstName: s.firstName,
-      lastName: s.lastName,
-      registrationNumber: s.registrationNumber,
-      espId: s.espId,
-      heartRate: 70 + Math.floor(Math.random() * 15),
-      stressPercent: 20 + Math.floor(Math.random() * 15),
-      stressLevel: 'BASELINE',
-      connected: true,
-      isSilenced: false
-    }
-  }
-
-  function runSimulator(availableStudents: Student[]) {
-    if (simulationInterval) clearInterval(simulationInterval)
-
-    simulationInterval = window.setInterval(() => {
-      if (!isSessionActive.value) return
-
-      // 1. Telemetry Jitter for existing connected students
-      desks.value.forEach(desk => {
-        if (desk.student && desk.student.connected) {
-          // Adjust heart rate
-          const hrDiff = Math.floor(Math.random() * 5) - 2
-          desk.student.heartRate = Math.min(Math.max(desk.student.heartRate + hrDiff, 60), 150)
-
-          // Adjust stress based on stressLevel
-          let stressDiff = Math.floor(Math.random() * 7) - 3
-          desk.student.stressPercent = Math.min(Math.max(desk.student.stressPercent + stressDiff, 10), 99)
-
-          // Auto-adjust level threshold
-          if (desk.student.stressPercent >= 75) {
-            if (desk.student.stressLevel !== 'HIGH_STRESS') {
-              desk.student.stressLevel = 'HIGH_STRESS'
-              if (!desk.student.isSilenced && !isSilencedAll.value) {
-                addLog(`CRITICAL: High stress alert for ${desk.student.firstName} ${desk.student.lastName} (${desk.student.stressPercent}% stress)`, 'error')
-              }
-            }
-          } else if (desk.student.stressPercent >= 45) {
-            if (desk.student.stressLevel !== 'MILD_STRESS') {
-              desk.student.stressLevel = 'MILD_STRESS'
-              addLog(`Warning: Elevated stress detected for ${desk.student.firstName} ${desk.student.lastName} (${desk.student.stressPercent}% stress)`, 'warning')
-            }
-          } else {
-            desk.student.stressLevel = 'BASELINE'
-          }
-        }
-      })
-
-      // 2. Occasional new check-in (15% chance per tick if empty desks and available students)
-      if (Math.random() < 0.15 && availableStudents.length > 0) {
-        const emptyDesks = desks.value.filter(d => !d.student)
-        if (emptyDesks.length > 0) {
-          const targetDesk = emptyDesks[Math.floor(Math.random() * emptyDesks.length)]
-          const student = availableStudents.splice(Math.floor(Math.random() * availableStudents.length), 1)[0]
-
-          targetDesk.student = createMonitorStudent(student)
-          addLog(`${student.firstName} ${student.lastName} scanned ${targetDesk.code} - Device Connected.`, 'success')
-        }
+    // Countdown timer
+    timerInterval = window.setInterval(() => {
+      if (timeRemainingSeconds.value > 0) {
+        timeRemainingSeconds.value--
+      } else {
+        stopMonitoring()
       }
-
-      // 3. Occasional disconnect or stress spike (5% chance)
-      if (Math.random() < 0.05) {
-        const activeDesks = desks.value.filter(d => d.student && d.student.connected)
-        if (activeDesks.length > 0) {
-          const chosen = activeDesks[Math.floor(Math.random() * activeDesks.length)]
-          if (chosen.student) {
-            if (Math.random() < 0.4) {
-              // Disconnect
-              chosen.student.connected = false
-              addLog(`Connection Lost: ${chosen.student.firstName}'s bracelet offline.`, 'warning')
-            } else {
-              // Stress spike
-              chosen.student.stressPercent = 80 + Math.floor(Math.random() * 15)
-              chosen.student.stressLevel = 'HIGH_STRESS'
-              chosen.student.heartRate = 110 + Math.floor(Math.random() * 20)
-              if (!chosen.student.isSilenced && !isSilencedAll.value) {
-                addLog(`CRITICAL: Stress spike for ${chosen.student.firstName} ${chosen.student.lastName} (${chosen.student.stressPercent}% stress, ${chosen.student.heartRate} BPM)`, 'error')
-              }
-            }
-          }
-        }
-      }
-
-      // 4. Occasional reconnect of disconnected students (5% chance)
-      if (Math.random() < 0.05) {
-        const disconnectedDesks = desks.value.filter(d => d.student && !d.student.connected)
-        if (disconnectedDesks.length > 0) {
-          const chosen = disconnectedDesks[Math.floor(Math.random() * disconnectedDesks.length)]
-          if (chosen.student) {
-            chosen.student.connected = true
-            chosen.student.stressPercent = 40
-            chosen.student.stressLevel = 'MILD_STRESS'
-            addLog(`Connection Restored: ${chosen.student.firstName}'s bracelet back online.`, 'success')
-          }
-        }
-      }
-
-    }, 3000)
+    }, 1000)
   }
 
   async function stopMonitoring() {
-    if (simulationInterval) {
-      clearInterval(
-        simulationInterval,
-      )
-      simulationInterval = null
-    }
-
     if (timerInterval) {
-      clearInterval(
-        timerInterval,
-      )
+      clearInterval(timerInterval)
       timerInterval = null
     }
+
+    stopPolling()
+    unbindSocketEvents()
+    disconnectSocket()
 
     isSessionActive.value = false
 
     if (activeExamId.value) {
       try {
-        await api.post(
-          `/exams/${activeExamId.value}/end`
-        )
+        await api.post(`/exams/${activeExamId.value}/end`)
       } catch (error) {
-        console.error(
-          'Failed to end exam:',
-          error
-        )
+        console.error('Failed to end exam:', error)
       }
     }
 
@@ -381,8 +355,6 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     addLog(`All student alert noises ${isSilencedAll.value ? 'silenced' : 'unsilenced'}.`, 'info')
   }
 
-
-
   const formattedTimeRemaining = computed(() => {
     const hours = Math.floor(timeRemainingSeconds.value / 3600)
     const minutes = Math.floor((timeRemainingSeconds.value % 3600) / 60)
@@ -401,6 +373,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     connectedStudentsCount,
     studentsAtRiskCount,
     classStressIndex,
+    gridSlots,
     formattedTimeRemaining,
     startMonitoring,
     stopMonitoring,
