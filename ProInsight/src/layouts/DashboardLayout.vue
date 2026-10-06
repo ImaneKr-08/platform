@@ -56,7 +56,7 @@ const menuItems = computed(() => {
     return [
       { name: 'Dashboard', path: '/', icon: LayoutDashboard },
       { name: 'Students', path: '/students', icon: Users },
-      { name: 'Professors', path: '/professors', icon: GraduationCap },
+      { name: 'Staffs', path: '/staffs', icon: GraduationCap },
       { name: 'Classrooms', path: '/classrooms', icon: Grid },
       { name: 'QR Codes', path: '/qr-code', icon: QrCode },
       { name: 'Exams', path: '/exams', icon: Calendar },

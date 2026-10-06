@@ -310,7 +310,7 @@ async function stopExamSession() {
               v-model="formModel.professorId"
               class="input-field"
             >
-              <option v-for="prof in professorsStore.professors" :key="prof.id" :value="prof.id">{{ prof.name }} ({{ prof.department }})</option>
+              <option v-for="prof in professorsStore.professors" :key="prof.id" :value="prof.id">{{ prof.name }}{{ prof.department ? ` (${prof.department})` : '' }}</option>
             </select>
           </div>
         </div>

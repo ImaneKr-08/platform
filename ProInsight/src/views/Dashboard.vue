@@ -7,6 +7,7 @@ import { useProfessorsStore } from '../stores/professors'
 import { useClassroomsStore } from '../stores/classrooms'
 import { useExamsStore } from '../stores/exams'
 import { useMonitoringStore } from '../stores/monitoring'
+import { api } from '../services/api'
 import BaseChart from '../components/BaseChart.vue'
 import {
   Users,
@@ -32,6 +33,7 @@ const monitoringStore = useMonitoringStore()
 onMounted(() => {
   studentsStore.initStudents()
   professorsStore.initProfessors()
+  professorsStore.initTherapists()
   classroomsStore.initClassrooms()
   examsStore.initExams()
   examsStore.bindSocketEvents()
@@ -43,6 +45,7 @@ const user = computed(() => authStore.user)
 // Counts
 const totalStudents = computed(() => studentsStore.students.length)
 const totalProfessors = computed(() => professorsStore.professors.length)
+const totalTherapists = computed(() => professorsStore.therapists.length)
 const activeExamsCount = computed(() => examsStore.exams.filter(e => e.status === 'active').length)
 const totalClassrooms = computed(() => classroomsStore.classrooms.length)
 
@@ -90,12 +93,23 @@ function goToMonitor(examId: number) {
   router.push(`/monitoring/${examId}`)
 }
 
-function startExamSession(examId: number) {
+async function startExamSession(examId: number) {
   const numericExamId = typeof examId === 'string' ? parseInt(examId, 10) : examId
   if (!Number.isFinite(numericExamId)) return
 
-  monitoringStore.startMonitoring(numericExamId)
-  goToMonitor(examId)
+  const exam = examsStore.exams.find(e => e.id === numericExamId)
+  if (exam && exam.status === 'scheduled') {
+    try {
+      await api.post(`/exams/${numericExamId}/start`)
+      exam.status = 'active'
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to start the exam session on the backend.')
+      return
+    }
+  }
+
+  await monitoringStore.startMonitoring(numericExamId)
+  goToMonitor(numericExamId)
 }
 
 // Chart Mock Data
@@ -227,14 +241,16 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
           <span class="text-[10px] text-indigo-500 font-semibold bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded-full mt-1.5 inline-block">Registered</span>
         </div>
 
-        <!-- Total Professors -->
+        <!-- Total Staff -->
         <div class="bg-[var(--bg-secondary)] border border-[var(--border-color)] p-4 sm:p-5 rounded-xl shadow-xs">
           <div class="flex items-center justify-between mb-3 text-[var(--text-secondary)]">
-            <span class="text-xs font-semibold uppercase tracking-wider">Professors</span>
+            <span class="text-xs font-semibold uppercase tracking-wider">Staffs</span>
             <GraduationCap class="h-5 w-5 text-teal-500" />
           </div>
-          <p class="text-2xl font-bold tracking-tight text-[var(--text-primary)]">{{ totalProfessors }}</p>
-          <span class="text-[10px] text-teal-500 font-semibold bg-teal-50 dark:bg-teal-950/30 px-2 py-0.5 rounded-full mt-1.5 inline-block">Proctors</span>
+          <p class="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+            {{ totalProfessors }} <span class="text-xs text-[var(--text-muted)]">P</span> / {{ totalTherapists }} <span class="text-xs text-[var(--text-muted)]">T</span>
+          </p>
+          <span class="text-[10px] text-teal-500 font-semibold bg-teal-50 dark:bg-teal-950/30 px-2 py-0.5 rounded-full mt-1.5 inline-block">Proctors / Therapists</span>
         </div>
 
         <!-- Active Exams -->
@@ -277,37 +293,6 @@ const highStressAlertsLabels = ['Exam A', 'Exam B', 'Exam C', 'Exam D', 'Exam E'
 
       </div>
 
-      <!-- Quick Session launcher when monitoring is inactive -->
-      <div v-if="!monitoringStore.isSessionActive" class="p-6 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h4 class="text-sm font-bold text-[var(--text-primary)]">Ready to test the Live Seating Map & WebSocket Simulator?</h4>
-          <p class="text-xs text-[var(--text-secondary)] mt-1">Starting the midterm session will simulate students entering Room 302 and checking in.</p>
-        </div>
-        <button
-          @click="startExamSession(1)"
-          class="flex items-center gap-2 px-4 py-2 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg text-xs font-bold transition-all shadow-md active:scale-98 shrink-0"
-        >
-          <Play class="h-3.5 w-3.5 fill-current" />
-          Start Mock CS101 Exam
-        </button>
-      </div>
-
-      <div v-else class="p-6 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/30 rounded-xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
-          <div>
-            <h4 class="text-sm font-bold text-emerald-950 dark:text-emerald-300">CS101 Midterm Exam is currently running in Room 302</h4>
-            <p class="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">Active WebSocket updates are flowing to the live monitor page.</p>
-          </div>
-        </div>
-        <button
-          @click="goToMonitor(1)"
-          class="flex items-center gap-1.5 px-4 py-2 bg-[#041627] hover:bg-[#0d2a45] text-white rounded-lg text-xs font-bold transition-all shrink-0"
-        >
-          Open Seating Map
-          <ArrowRight class="h-3.5 w-3.5" />
-        </button>
-      </div>
 
       <!-- Charts Board -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

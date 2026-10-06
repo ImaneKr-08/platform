@@ -16,6 +16,8 @@ const itemsPerPage = 5
 const isFormModalOpen = ref(false)
 const modalMode = ref<'add' | 'edit'>('add')
 const errorMsg = ref('')
+const successMsg = ref('')
+const isSubmitting = ref(false)
 
 const formModel = ref<Student>({
   firstName: '',
@@ -83,6 +85,8 @@ function openAddModal() {
   }
   generatePassword()
   errorMsg.value = ''
+  successMsg.value = ''
+  isSubmitting.value = false
   isFormModalOpen.value = true
 }
 
@@ -90,31 +94,47 @@ async function openEditModal(student: Student) {
   modalMode.value = 'edit'
   formModel.value = { ...student }
   errorMsg.value = ''
+  successMsg.value = ''
+  isSubmitting.value = false
   isFormModalOpen.value = true
 }
 
 async function handleSave() {
-  if (!formModel.value.firstName || !formModel.value.lastName || !formModel.value.group) {
-    errorMsg.value = 'First name, last name, and group are required.'
+  if (
+    !formModel.value.firstName?.trim() ||
+    !formModel.value.lastName?.trim() ||
+    !formModel.value.email?.trim() ||
+    !formModel.value.registrationNumber?.trim() ||
+    !formModel.value.group?.trim() ||
+    !formModel.value.espId?.trim() ||
+    (modalMode.value === 'add' && !formModel.value.password?.trim())
+  ) {
+    errorMsg.value = 'All fields are required. Please fill them all.'
     return
   }
 
   errorMsg.value = ''
+  successMsg.value = ''
+  isSubmitting.value = true
   
-  if (modalMode.value === 'add') {
-    const res = studentsStore.addStudent(formModel.value)
-    if ((await res).success) {
-      isFormModalOpen.value = false
+  try {
+    let res;
+    if (modalMode.value === 'add') {
+      res = await studentsStore.addStudent(formModel.value)
     } else {
-      errorMsg.value = (await res).message || 'Error creating student profile.'
+      res = await studentsStore.updateStudent(formModel.value.registrationNumber, formModel.value)
     }
-  } else {
-    const res = studentsStore.updateStudent(formModel.value.registrationNumber, formModel.value)
+    
     if (res.success) {
-      isFormModalOpen.value = false
+      successMsg.value = modalMode.value === 'add' ? 'Created successfully!' : 'Updated successfully!'
+      setTimeout(() => {
+        isFormModalOpen.value = false
+      }, 1500)
     } else {
-      errorMsg.value = res.message || 'Error updating student profile.'
+      errorMsg.value = res.message || 'Operation failed.'
     }
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -260,6 +280,13 @@ function handleDelete(regNumber: string) {
         <span>{{ errorMsg }}</span>
       </div>
 
+      <div v-if="successMsg" class="mb-4 flex items-start gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900/40 p-3 rounded-lg text-xs text-emerald-600 dark:text-emerald-400">
+        <svg class="h-4.5 w-4.5 shrink-0 text-emerald-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        <span>{{ successMsg }}</span>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-semibold text-[var(--text-secondary)] mb-1">First Name</label>
@@ -297,7 +324,8 @@ function handleDelete(regNumber: string) {
           <input
             v-model="formModel.registrationNumber"
             type="text"
-            class="input-field bg-[var(--bg-tertiary)] cursor-not-allowed"
+            class="input-field"
+            :class="{ 'bg-[var(--bg-tertiary)] cursor-not-allowed': modalMode === 'edit' }"
             :disabled="modalMode === 'edit'"
             title="Student IDs cannot be modified once set"
             placeholder="XXXXXXXX"
@@ -353,15 +381,22 @@ function handleDelete(regNumber: string) {
       <template #footer>
         <button
           @click="isFormModalOpen = false"
-          class="px-4 py-2 border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] rounded-lg text-sm font-semibold transition-colors"
+          :disabled="isSubmitting"
+          class="px-4 py-2 border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           @click="handleSave"
-          class="px-4 py-2 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+          :disabled="isSubmitting"
+          class="px-4 py-2 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
         >
-          {{ modalMode === 'add' ? 'Save Record' : 'Apply Changes' }}
+          <svg v-if="isSubmitting" class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span v-if="isSubmitting">Waiting...</span>
+          <span v-else>{{ modalMode === 'add' ? 'Save Record' : 'Apply Changes' }}</span>
         </button>
       </template>
     </Modal>

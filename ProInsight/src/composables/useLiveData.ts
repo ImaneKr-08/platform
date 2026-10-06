@@ -26,8 +26,9 @@ function refreshForRoute(routeName: RouteRecordNameGeneric | null | undefined) {
     case 'Students':
       studentsStore.initStudents()
       break
-    case 'Professors':
+    case 'Staffs':
       professorsStore.initProfessors()
+      professorsStore.initTherapists()
       break
     case 'Classrooms':
     case 'QRCode':

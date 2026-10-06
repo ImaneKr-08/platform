@@ -7,11 +7,15 @@ import { api } from '../services/api'
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket'
 
 export interface MonitorStudent {
+  id: number
   firstName: string
   lastName: string
   registrationNumber: string
   espId: string
   heartRate: number
+  hrv: number
+  gsr: number
+  stressScore: number
   stressPercent: number
   stressLevel: 'BASELINE' | 'MILD_STRESS' | 'HIGH_STRESS'
   connected: boolean
@@ -116,10 +120,14 @@ export const useMonitoringStore = defineStore('monitoring', () => {
       braceletId: string
       studentId: number
       heartRate: number
+      hrv: number
+      gsr: number
       stressScore: number
       stressLevel: string
     }) => {
-      console.log('TELEMETRY RECEIVED', data)
+      console.log('🟢 TELEMETRY RECEIVED VIA WEBSOCKET:', data)
+      addLog(`[Live Telemetry] Bracelet: ${data.braceletId} | Student ID: ${data.studentId} | Heart Rate: ${data.heartRate} bpm | Stress: ${data.stressLevel}`, 'info')
+      
       // Map backend display level to enum
       const lvlMap: Record<string, 'BASELINE' | 'MILD_STRESS' | 'HIGH_STRESS'> = {
         'Baseline': 'BASELINE',
@@ -130,9 +138,12 @@ export const useMonitoringStore = defineStore('monitoring', () => {
       const stressPercent = Math.round(data.stressScore * 100)
 
       // Find desk by studentId and update its data
-      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      const desk = desks.value.find(d => d.student && d.student.id === data.studentId)
       if (desk && desk.student) {
         desk.student.heartRate = data.heartRate
+        desk.student.hrv = data.hrv
+        desk.student.gsr = data.gsr
+        desk.student.stressScore = data.stressScore
         desk.student.stressPercent = stressPercent
         const prevLevel = desk.student.stressLevel
         desk.student.stressLevel = stressLevel
@@ -148,7 +159,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     })
 
     socket.on('studentConnected', (data: { studentId: number; braceletId: string }) => {
-      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      const desk = desks.value.find(d => d.student && d.student.id === data.studentId)
       if (desk && desk.student) {
         desk.student.connected = true
         desk.student.espId = data.braceletId
@@ -157,7 +168,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     })
 
     socket.on('studentDisconnected', (data: { studentId: number }) => {
-      const desk = desks.value.find(d => d.student && Number(d.student.espId) === data.studentId)
+      const desk = desks.value.find(d => d.student && d.student.id === data.studentId)
       if (desk && desk.student) {
         desk.student.connected = false
         addLog(`Connection Lost: ${desk.student.firstName} ${desk.student.lastName}'s bracelet offline.`, 'warning')
@@ -204,12 +215,17 @@ export const useMonitoringStore = defineStore('monitoring', () => {
           const desk = desks.value.find(d => d.id === deskId)
           if (desk) {
             if (!desk.student) {
+              const storeStudent = studentsStore.students.find(s => s.registrationNumber === student.studentCode)
               desk.student = {
-                firstName: student.firstName,
-                lastName: student.lastName,
+                id: student.id,
+                firstName: student.user?.firstName || student.firstName || storeStudent?.firstName || 'Unknown',
+                lastName: student.user?.lastName || student.lastName || storeStudent?.lastName || '',
                 registrationNumber: student.studentCode,
                 espId: student.braceletId ?? String(student.id),
                 heartRate: student.heartRate ?? 0,
+                hrv: 0,
+                gsr: 0,
+                stressScore: student.stressScore ?? 0,
                 stressPercent: student.stressScore ? Math.round(student.stressScore * 100) : 0,
                 stressLevel: (student.stressLevel as any) ?? 'BASELINE',
                 connected: student.connected ?? false,
@@ -270,7 +286,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     // Build desks from classroom tables
     desks.value = room.tables.map(t => ({
       id: String(t.id),
-      code: t.qrCode || `DESK-${t.id}`,
+      code: `DESK-${t.id}`,
       student: null,
     }))
 
@@ -283,12 +299,17 @@ export const useMonitoringStore = defineStore('monitoring', () => {
           if (!student || !table) return
           const desk = desks.value.find(d => d.id === String(table.id))
           if (desk) {
+            const storeStudent = studentsStore.students.find(s => s.registrationNumber === student.studentCode)
             desk.student = {
-              firstName: student.firstName,
-              lastName: student.lastName,
+              id: student.id,
+              firstName: student.user?.firstName || student.firstName || storeStudent?.firstName || 'Unknown',
+              lastName: student.user?.lastName || student.lastName || storeStudent?.lastName || '',
               registrationNumber: student.studentCode,
               espId: student.braceletId ?? String(student.id),
               heartRate: student.heartRate ?? 0,
+              hrv: 0,
+              gsr: 0,
+              stressScore: student.stressScore ?? 0,
               stressPercent: student.stressScore ? Math.round(student.stressScore * 100) : 0,
               stressLevel: (student.stressLevel as any) ?? 'BASELINE',
               connected: student.connected ?? false,

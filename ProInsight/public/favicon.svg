@@ -1,7 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Dark background circle matching app's dark theme -->
-  <rect width="32" height="32" rx="7" fill="#041627"/>
-
   <!-- Emerald green Activity / heartbeat line (lucide-style) -->
   <!-- The lucide "activity" icon path scaled and centered in 32x32 -->
   <!-- Original lucide viewBox is 0 0 24 24, scaled ~0.95x centered -->

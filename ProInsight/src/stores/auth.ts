@@ -7,7 +7,7 @@ export interface User {
   id: number
   email: string
   name: string
-  role: 'ADMIN' | 'PROFESSOR'
+  role: 'ADMIN' | 'PROFESSOR' | 'admin' | 'professor'
 }
 
 function parseSavedUser(raw: string | null): User | null {
@@ -29,7 +29,7 @@ function mapBackendUser(backendUser: {
     id: backendUser.id,
     email: backendUser.email,
     name: backendUser.name ?? backendUser.email.split('@')[0],
-    role: backendUser.role.toLowerCase() as 'ADMIN' | 'PROFESSOR',
+    role: backendUser.role.toLowerCase() as any,
   }
 }
 
@@ -43,8 +43,8 @@ export const useAuthStore = defineStore('auth', () => {
   let initPromise: Promise<void> | null = null
 
   const userRole = computed(() => user.value?.role || null)
-  const isAdmin = computed(() => user.value?.role === 'ADMIN')
-  const isProfessor = computed(() => user.value?.role === 'PROFESSOR')
+  const isAdmin = computed(() => user.value?.role?.toUpperCase() === 'ADMIN')
+  const isProfessor = computed(() => user.value?.role?.toUpperCase() === 'PROFESSOR')
 
   function applyTheme() {
     const root = document.documentElement
@@ -106,7 +106,7 @@ export const useAuthStore = defineStore('auth', () => {
       id: data.id,
       email: data.email,
       role: data.role,
-      name: fallbackUser?.email === data.email ? fallbackUser.name : undefined,
+      name: fallbackUser?.email === data.email ? fallbackUser?.name : undefined,
     })
     persistUser(restored)
     connectSocket()

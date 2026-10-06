@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMonitoringStore, type MonitorDesk } from '../stores/monitoring'
 import { useExamsStore } from '../stores/exams'
 import { useAuthStore } from '../stores/auth'
+import { api } from '../services/api'
 import {
   Activity,
   Heart,
@@ -17,9 +18,11 @@ import {
   Power,
   Play,
   Grid,
-  ClipboardList
+  ClipboardList,
+  QrCode
 } from 'lucide-vue-next'
 import { useClassroomsStore } from '../stores/classrooms'
+import Modal from '../components/Modal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,13 +86,11 @@ onMounted(async () => {
       firstExam.id
   }
 })
-// Filter exams based on role
 const filteredExamsList = computed(() => {
-  if (authStore.isAdmin) {
-    return examsStore.exams
-  } else {
-    return examsStore.exams.filter(e => e.professorEmail.toLowerCase() === authStore.user?.email.toLowerCase())
-  }
+  const list = authStore.isAdmin
+    ? examsStore.exams
+    : examsStore.exams.filter(e => e.professorEmail.toLowerCase() === authStore.user?.email.toLowerCase())
+  return list.filter(e => e.status !== 'completed')
 })
 watch(
   filteredExamsList,
@@ -144,8 +145,24 @@ const monitoringGridCells = computed(() => {
   return cells
 })
 
+const selectedExam = computed(() => {
+  return examsStore.exams.find(e => e.id === selectedExamId.value) || null
+})
+
 async function startSession() {
   if (!selectedExamId.value) return
+  
+  const exam = selectedExam.value
+  if (exam && exam.status === 'scheduled') {
+    try {
+      await api.post(`/exams/${selectedExamId.value}/start`)
+      exam.status = 'active'
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to start the exam session on the backend.')
+      return
+    }
+  }
+
   await monitoringStore.startMonitoring(selectedExamId.value)
   router.push(`/monitoring/${selectedExamId.value}`)
 }
@@ -181,9 +198,19 @@ function monitorDeskAt(
 function getDesk(x: number, y: number): MonitorDesk | null {
   return monitorDeskAt(x, y)
 }
+
+const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3000'
+const isQrModalOpen = ref(false)
+const selectedTableForQr = ref<{ id: string; code: string } | null>(null)
+
+function showQrModal(desk: any) {
+  if (!desk) return
+  selectedTableForQr.value = { id: desk.id, code: desk.code }
+  isQrModalOpen.value = true
+}
 </script>
 
-<template  v-if="monitorDeskAt(cell.x, cell.y) ">
+<template>
   <div class="flex flex-col h-[calc(100vh-8rem)] select-none animate-fade-in overflow-auto">
     
     <!-- IF NO EXAM ACTIVE OR SELECTED -->
@@ -209,7 +236,7 @@ function getDesk(x: number, y: number): MonitorDesk | null {
           class="w-full sm:w-auto flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#026783] hover:bg-[#0588ad] disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold transition-all shrink-0 shadow-sm"
         >
           <Play class="h-4 w-4 fill-current" />
-          Initialize Exam
+          {{ selectedExam?.status === 'active' ? 'View Monitoring' : 'Initialize Exam' }}
         </button>
       </div>
 
@@ -275,7 +302,6 @@ function getDesk(x: number, y: number): MonitorDesk | null {
               class="w-48 h-36 relative"
             >
               <!-- Placed Desk Card -->
-               <template v-if="getDesk(cell.x, cell.y)">
               <div
                 v-if="monitorDeskAt(cell.x, cell.y)"
                 class="absolute inset-0 bg-[var(--bg-secondary)] border rounded-xl shadow-md p-3 flex flex-col justify-between select-none relative group"
@@ -315,7 +341,6 @@ function getDesk(x: number, y: number): MonitorDesk | null {
                   </span>
                   <span v-else class="text-slate-400 font-normal">EMPTY</span>
                 </div>
-
                 <!-- Student Details -->
                 <div class="flex-1 flex flex-col justify-center min-w-0 py-1 select-text">
                   <p class="text-xs font-bold text-[var(--text-primary)] truncate">
@@ -333,7 +358,7 @@ function getDesk(x: number, y: number): MonitorDesk | null {
                       <Heart class="h-3 w-3 text-rose-500 fill-rose-500 shrink-0" />
                       {{ cell.desk?.student.heartRate }} BPM
                     </span>
-                    <span class="text-[var(--text-primary)]">{{ cell.desk?.student.stressPercent }}% stress</span>
+                    
                   </div>
                   <div class="h-1 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
                     <div class="h-full transition-all duration-300"
@@ -351,8 +376,15 @@ function getDesk(x: number, y: number): MonitorDesk | null {
                   <AlertTriangle class="h-3.5 w-3.5" /> Wearable Lost Link
                 </div>
 
-                <div v-else class="text-[10px] text-[var(--text-muted)] flex items-center justify-center gap-1">
-                  Ready to scan
+                <div v-else class="text-[10px] text-[var(--text-muted)] flex items-center justify-between w-full mt-1">
+                  <span>Ready to scan</span>
+                  <button
+                    @click.stop="showQrModal(cell.desk)"
+                    class="flex items-center gap-1 px-2 py-1 bg-[#026783] hover:bg-[#0588ad] text-white rounded text-[9px] font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  >
+                    <QrCode class="h-3 w-3" />
+                    Show QR
+                  </button>
                 </div>
 
                 <!-- Individual Silence triggers -->
@@ -378,7 +410,6 @@ function getDesk(x: number, y: number): MonitorDesk | null {
               >
                 Empty Spot
              </div>
-            </template>
             </div>
           </div>
         </div>
@@ -481,5 +512,38 @@ function getDesk(x: number, y: number): MonitorDesk | null {
 
     </div>
 
+    <!-- QR Code Modal -->
+    <Modal
+      :show="isQrModalOpen"
+      :title="`Scan QR Code - ${selectedTableForQr?.code}`"
+      @close="isQrModalOpen = false"
+    >
+      <div class="flex flex-col items-center justify-center p-6 text-center">
+        <p class="text-xs text-[var(--text-secondary)] mb-4">
+          Scan this table QR code with the student companion app to check in.
+        </p>
+        
+        <div class="bg-white p-4 rounded-lg border border-[var(--border-color)] shadow-inner mb-4 w-60 h-60 flex items-center justify-center">
+          <img
+            v-if="selectedTableForQr"
+            :src="`${API_URL}/qr/${selectedTableForQr.id}`"
+            class="w-full h-full object-contain"
+            :alt="`QR Table ${selectedTableForQr.code}`"
+          />
+        </div>
+
+        <p class="text-[10px] text-[var(--text-muted)] select-all font-mono">
+          proinsight://room/{{ currentClassroom?.id }}/table/{{ selectedTableForQr?.id }}
+        </p>
+      </div>
+      <template #footer>
+        <button
+          @click="isQrModalOpen = false"
+          class="px-4 py-2 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+        >
+          Close
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>

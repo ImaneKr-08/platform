@@ -78,11 +78,13 @@ export const useClassroomsStore = defineStore('classrooms', () => {
     classroomId: number,
     positionX: number,
     positionY: number,
+    id?: number,
   ) {
     const { data } = await api.post('/tables', {
       classroomId,
       positionX,
       positionY,
+      id,
     })
 
     const room = classrooms.value.find(

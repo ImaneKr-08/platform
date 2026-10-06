@@ -7,10 +7,19 @@ export interface Professor {
   name: string
   email: string
   password?: string
+  department?: string
+}
+
+export interface Therapist {
+  id: number
+  name: string
+  email: string
+  password?: string
 }
 
 export const useProfessorsStore = defineStore('professors', () => {
   const professors = ref<Professor[]>([])
+  const therapists = ref<Therapist[]>([])
 
 
   async function initProfessors() {
@@ -99,12 +108,59 @@ export const useProfessorsStore = defineStore('professors', () => {
     }
   }
 
+  async function initTherapists() {
+    try {
+      const response = await api.get('/therapists')
+      if (response.data && Array.isArray(response.data)) {
+        therapists.value = response.data.map((t: any) => ({
+          id: t.id,
+          name: `${t.user?.firstName} ${t.user?.lastName}`,
+          email: t.user?.email,
+        }))
+        return
+      }
+    } catch (err) {
+      console.warn('Failed to load therapists from backend:', err)
+    }
+  }
+
+  async function addTherapist(therapist: Omit<Therapist, 'id'>) {
+    const exists = therapists.value.some(t => t.email.toLowerCase() === therapist.email.toLowerCase())
+    if (exists) {
+      return { success: false, message: 'Therapist email already exists.' }
+    }
+
+    try {
+      const nameParts = therapist.name.split(' ')
+      const firstName = nameParts[0] || 'Therapist'
+      const lastName = nameParts.slice(1).join(' ') || 'User'
+
+      await api.post('/users', {
+        firstName,
+        lastName,
+        email: therapist.email,
+        password: therapist.password,
+        role: 'THERAPIST'
+      })
+
+    } catch (err: any) {
+      console.warn('Failed to save therapist to backend:', err)
+      return { success: false, message: err.response?.data?.message || 'Failed to save therapist on backend.' }
+    }
+
+    await initTherapists()
+    return { success: true }
+  }
+
   return {
     professors,
+    therapists,
     initProfessors,
     addProfessor,
     updateProfessor,
-    deleteProfessor
+    deleteProfessor,
+    initTherapists,
+    addTherapist
   }
 })
 

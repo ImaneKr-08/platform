@@ -52,8 +52,11 @@ onMounted(() => {
 
 // Drag and drop states
 const draggedTableId = ref<number | null>(null)
+  const isDroppingCell = ref<string | null>(null)  // ← add this line
+
 const newTableCode = ref('')
 const designerError = ref('')
+const isAddingTable = ref(false)
 
 function openDesigner(roomId: number) {
   selectedRoomId.value = roomId
@@ -99,46 +102,37 @@ function onDragEnd() {
   draggedTableId.value = null
 }
 
-async function onDropToGrid(
-  e: DragEvent,
-  x: number,
-  y: number,
-) {
+async function onDropToGrid(e: DragEvent, x: number, y: number) {
   e.preventDefault()
-
   if (!activeRoom.value) return
 
-  const tableId =
-    Number(
-      e.dataTransfer?.getData('text/plain')
-    ) || draggedTableId.value
-
+  const tableId = Number(e.dataTransfer?.getData('text/plain')) || draggedTableId.value
   if (!tableId) return
 
-  const table =
-    activeRoom.value.tables.find(
-      t => t.id === tableId,
-    )
-
+  const table = activeRoom.value.tables.find(t => t.id === tableId)
   if (!table) return
-try {
-  await classroomsStore.moveTable(
-    table.id,
-    x,
-    y,
-  )
 
-  designerError.value = ''
-}
-catch (error: any) {
-  designerError.value =
-    error?.response?.data?.message ??
-    'Unable to move table'
-}
+  // Optimistic UI update: move table immediately
+  const originalX = table.positionX;
+  const originalY = table.positionY;
+  table.positionX = x;
+  table.positionY = y;
+  
+  isDroppingCell.value = `${x}-${y}`;
+  draggedTableId.value = null;
 
-  draggedTableId.value = null
+  try {
+    await classroomsStore.moveTable(table.id, x, y)
+    designerError.value = ''
+  } catch (error: any) {
+    // Revert if backend fails
+    table.positionX = originalX;
+    table.positionY = originalY;
+    designerError.value = error?.response?.data?.message ?? 'Unable to move table'
+  } finally {
+    isDroppingCell.value = null;
+  }
 }
-
 
 async function addNewTable() {
   if (!activeRoom.value) return
@@ -158,11 +152,29 @@ async function addNewTable() {
     return
   }
 
-  await classroomsStore.addTableToRoom(
-    activeRoom.value.id,
-    firstEmptyCell.x,
-    firstEmptyCell.y,
-  )
+  let customId: number | undefined = undefined;
+  if (newTableCode.value.trim()) {
+    const numStr = newTableCode.value.replace(/\D/g, '');
+    if (numStr) {
+      customId = parseInt(numStr, 10);
+    }
+  }
+
+  try {
+    isAddingTable.value = true
+    await classroomsStore.addTableToRoom(
+      activeRoom.value.id,
+      firstEmptyCell.x,
+      firstEmptyCell.y,
+      customId
+    )
+    designerError.value = ''
+    newTableCode.value = ''
+  } catch (error: any) {
+    designerError.value = error?.response?.data?.message || 'Failed to add table. ID might be in use.'
+  } finally {
+    isAddingTable.value = false
+  }
 }
 
 async function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
@@ -354,12 +366,18 @@ async function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
                 placeholder="e.g. T-10"
                 class="input-field"
                 @keyup.enter="addNewTable"
+                :disabled="isAddingTable"
               />
               <button
                 @click="addNewTable"
-                class="px-3.5 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg transition-colors flex items-center justify-center shadow-xs"
+                :disabled="isAddingTable"
+                class="px-3.5 bg-[#026783] hover:bg-[#0588ad] text-white rounded-lg transition-colors flex items-center justify-center shadow-xs disabled:opacity-70"
               >
-                <Plus class="h-4.5 w-4.5" />
+                <Plus v-if="!isAddingTable" class="h-4.5 w-4.5" />
+                <svg v-else class="animate-spin h-4.5 w-4.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
               </button>
             </div>
             <p v-if="designerError" class="text-[10px] text-rose-500 font-semibold leading-tight">{{ designerError }}</p>
@@ -394,12 +412,13 @@ async function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
                 <div
                   v-if="tableAt(cell.x, cell.y)"
                   class="absolute inset-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] border-b-4 border-b-[#026783] rounded-lg shadow-sm p-2 flex flex-col justify-between hover:scale-105 transition-all select-none cursor-grab active:cursor-grabbing hover:border-[#026783]"
+                  :class="{ 'opacity-50 pointer-events-none animate-pulse': isDroppingCell === `${cell.x}-${cell.y}` }"
                   draggable="true"
                   @dragstart="onDragStart($event, tableAt(cell.x, cell.y)!.id)"
                   @dragend="onDragEnd"
                 >
                   <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-                    <span class="font-mono font-bold">{{ tableAt(cell.x, cell.y)?.qrCode }}</span>
+                    <span class="font-mono font-bold">DESK-{{ tableAt(cell.x, cell.y)?.id }}</span>
                     <Move class="h-3 w-3" />
                   </div>
                   
@@ -414,14 +433,25 @@ async function updateGridSize(dimension: 'rows' | 'cols', delta: number) {
                 </div>
 
                 <!-- Empty Blueprint Dropzone Slot -->
-                <div
-                  v-else
-                  class="absolute inset-0 border-2 border-dashed border-[var(--border-color)] hover:border-slate-400 dark:hover:border-slate-500 rounded-lg flex items-center justify-center transition-colors text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold cursor-default"
-                  @dragover.prevent
-                  @drop="onDropToGrid($event, cell.x, cell.y)"
-                >
-                  Empty Spot
-                </div>
+<div
+  v-else
+  class="absolute inset-0 border-2 border-dashed border-[var(--border-color)] hover:border-[#026783] hover:bg-[#026783]/5 rounded-lg flex items-center justify-center transition-all text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold cursor-default"
+  @dragover.prevent
+  @drop="onDropToGrid($event, cell.x, cell.y)"
+>
+  <template v-if="isDroppingCell === `${cell.x}-${cell.y}`">
+    <svg class="animate-spin h-5 w-5 text-[#026783]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+    </svg>
+  </template>
+  <template v-else>
+    <div class="flex flex-col items-center gap-1.5 opacity-50 hover:opacity-100 transition-opacity">
+      <Plus class="h-4 w-4" />
+      <span>Empty Spot</span>
+    </div>
+  </template>
+</div>
               </div>
             </div>
           </div>
